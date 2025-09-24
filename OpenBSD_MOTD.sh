@@ -11,8 +11,7 @@
 # that generates the MOTD, edit:
 # "/usr/local/bin/rc.motd_openbsd" if the script runs system wide
 # "~/.motd_openbsd" if the script runs on your user account only.
-#
-# To edit 
+##################################################################
 
 # ===== START OF THE SCRIPT =====
 set -e
