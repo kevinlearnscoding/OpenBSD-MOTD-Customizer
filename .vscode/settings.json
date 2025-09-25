@@ -1,0 +1,10 @@
+// Display rulers for OpenBSD terminals
+    {
+        "editor.rulers": [6, 80, 86]
+    }
+
+// Display rulers for COBOL Programs
+    // {
+    //     "editor.rulers": [6, 11, 72, 80]
+    // }
+

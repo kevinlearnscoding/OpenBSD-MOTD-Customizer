@@ -9,11 +9,11 @@ It automates setup for user or system-wide MOTD, handles dependencies, sets up [
 
 
 <div align="center">
-  <img src=".github/images/openbsd_screenshot1.png" width="80%" alt="Screenshot placeholder #1"/>
+  <img src="images/openbsd_screenshot1.png" width="80%" alt="Screenshot placeholder #1"/>
 </div>
 
 <div align="center">
-  <img src=".github/images/openbsd_screenshot2.png" width="80%" alt="Screenshot placeholder #2"/>
+  <img src="images/openbsd_screenshot2.png" width="80%" alt="Screenshot placeholder #2"/>
 </div>
 
 ---
@@ -152,6 +152,6 @@ Changes take effect immediately at next login.
 ## 📜 License
 
 This project is an **installer only** for OpenBSD.  
-It is distributed under the **BSD 2-Clause License**, consistent with [`dynamic_motd`](https://github.com/sstallion/dynamic_motd).  
+It is distributed under the **BSD 2-Clause License**. The [`figlet`](www.figtlet.com), [`lolcat-c`](https://github.com/jaseg/lolcat), [`curl`](https://github.com/curl/curl), and [`git`](https://git-scm.com/) projects each have their own respective licenses. 
 
 All credit for MOTD logic and original concept belongs to [sstallion](https://github.com/sstallion) and contributors to [`dynamic_motd`](https://github.com/sstallion/dynamic_motd).  

@@ -2,9 +2,8 @@
 
 ############################# WELCOME ###########################
 # ============================ INTRO ============================
-# This script will prompt the user for input
-# to set their banner text, weather location,
-# and temperature system unit. 
+# This script will prompt the user for input to set their banner text,
+# weather location, and temperature system unit. 
 # The user input is then hardcoded into the resulting script
 # that runs at every login, which generates a fresh MOTD file.
 # The MOTD file is static - to edit the contents of the template
@@ -16,9 +15,23 @@
 # ===== START OF THE SCRIPT =====
 set -e
 
+echo "============================= Welcome! ==============================="
+echo "This script will check for/install: lolcat, curl, and figlet." 
+echo "It will then set up a few customizations such as a custom banner in a"
+echo "fun text effect, and also get system stats and the current weather."
+echo "This message displays at each login, even from SSH connections."
+echo "figlet and curl are available via pkg_add. lolcat will most likely need"
+echo "to be compiled from source. If you would like to build/install lolcat"
+echo "yourself, please do so now. If not, the script will offer to build and"
+echo "install it for you."  
+echo ""
+echo "Let's get started!"
+echo ""
+
 # ===== Check if running as root =====
 if [ "$(id -u)" -ne 0 ]; then
-    echo "⚠ Warning: Some actions (like writing system-wide MOTD) may fail without root privileges."
+    echo "⚠ Warning: Some actions (like writing system-wide MOTD)"
+    echo "may fail without root privileges."
     echo "Run this script as root or with sudo privileges."
 fi
 
@@ -74,7 +87,8 @@ if echo "$MISSING" | grep -q "lolcat"; then
     echo "lolcat is missing. Options:"
     echo "1) Build lolcat-c yourself and rerun this script later"
     echo "2) Let the script build lolcat-c for you now"
-    read -p "Enter 1 or 2: " lol_choice </dev/tty
+    echo "Enter 1 or 2: " 
+    read lol_choice </dev/tty
     if [ "$lol_choice" = "1" ]; then
         echo "Please build lolcat-c manually from https://github.com/busyloop/lolcat-c and rerun this script."
         exit 0
@@ -82,7 +96,8 @@ if echo "$MISSING" | grep -q "lolcat"; then
         # Check for git
         if ! command -v git >/dev/null 2>&1; then
             echo "git is required to clone lolcat-c."
-            read -p "Install git via pkg_add? (Y/N): " git_choice </dev/tty
+            echo "Install git via pkg_add? (Y/N): " 
+            read git_choice </dev/tty
             git_choice=$(echo "$git_choice" | tr '[:lower:]' '[:upper:]')
             if [ "$git_choice" = "Y" ]; then
                 pkg_add git || { echo "Failed to install git. Exiting."; exit 1; }
@@ -167,7 +182,8 @@ while true; do
     fi
 done
 
-weather_url="wttr.in/${city_url}?format=3${unit_suffix}" # EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
+# EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
+weather_url="wttr.in/${city_url}?format=3${unit_suffix}" 
 
 # === FILE CREATION SECTION ===
 # ===== CREATE DYNAMIC MOTD SCRIPT =====
@@ -181,7 +197,7 @@ cat << EOF > "$MOTD_SCRIPT"
 # 16        List of fonts for banner - see figlet.org for more info
 # 23        Lolcat options - see "lolcat --help" for more options
 # 30        Divider character and length
-# 74        Banner style options - see figlet manpage on figlet.org for more info
+# 74        Banner style options - see 'figlet.org/figlet-man' for more info
 # 81-88     Emoji's used 
 
 # For weather reports adjustments see "wttr.in/:help" for more info
@@ -205,28 +221,38 @@ divider() {
 }
 
 # ===== Font Rotation with skip if not installed =====
-set -- \$FONT_LIST
-NUM_FONTS=\$#
-if [ -f "\$STATE_FILE" ]; then
-    INDEX=\$(cat "\$STATE_FILE")
+set -- $FONT_LIST
+NUM_FONTS=$#
+if [ -f "$STATE_FILE" ]; then
+    INDEX=$(cat "$STATE_FILE")
 else
     INDEX=0
 fi
 
-INDEX=\$((INDEX % NUM_FONTS))
-i=0
-while [ \$i -lt \$NUM_FONTS ]; do
-    FONT=\${!i}
-    if figlet -f "\$FONT" "test" >/dev/null 2>&1; then
-        break
-    else
-        echo "⚠ Font \$FONT not installed, skipping"
-        i=\$((i + 1))
+FOUND_FONT=""
+count=0
+for FONT in "$@"; do
+    if [ $count -ge $INDEX ]; then
+        if figlet -f "$FONT" "test" >/dev/null 2>&1; then
+            FOUND_FONT="$FONT"
+            break
+        else
+            echo "⚠ Font '$FONT' not installed."
+            echo "  Edit font list in $MOTD_SCRIPT"
+            echo "  Download fonts: https://www.figlet.org"
+            echo "  Install fonts in /usr/local/share/figlet or ~/.figlet"
+        fi
     fi
+    count=$((count + 1))
 done
 
-NEXT_INDEX=\$(((INDEX + 1) % NUM_FONTS))
-echo "\$NEXT_INDEX" > "\$STATE_FILE"
+# Fallback
+[ -z "$FOUND_FONT" ] && FOUND_FONT="standard"
+
+# Save next index
+NEXT_INDEX=$(( (INDEX + 1) % NUM_FONTS ))
+echo "$NEXT_INDEX" > "$STATE_FILE"
+
 
 # ===== Memory Info (OpenBSD) =====
 get_mem_info() {
@@ -252,13 +278,12 @@ fi
 echo ""
 echo "Font used: \$FONT"
 divider | colorize
-echo " 🖥️  Hostname : \$(hostname)"
-echo " ⏱️  Uptime   : \$(uptime | sed 's/.*up //; s/,.*//' | awk '{\$1=\$1};1')"
+echo " 🖥️ Hostname : \$(hostname)"
+echo " ⏱️ Uptime   : \$(uptime | sed 's/.*up //; s/,.*//' | awk '{\$1=\$1};1')"
 echo " 🧠 Memory    : \$(get_mem_info)"
 echo " 💽 Disk      : \$(get_disk_info)"
 divider | colorize
 if has_cmd curl; then
-    echo
     echo " 🌦️  Weather:"
     curl -s "$weather_url" || echo " (unavailable)"
 fi
@@ -278,9 +303,10 @@ fi
 echo ""
 echo "======================================================"
 echo "           *** Finished installing! ***           "
-echo "Your dynamic MOTD script is at: $MOTD_SCRIPT"
-echo "You can edit the fonts used in your banner at: $MOTD_SCRIPT"
-echo "Backup of original MOTD is at: $MOTD_BACKUP"
+echo "Your dynamic MOTD script is installed at and can be edited at:"
+echo "$MOTD_SCRIPT"
+echo "Backup of original MOTD is at:"
+echo "$MOTD_BACKUP"
 echo "It will run at login via $PROFILE_FILE"
 echo "======================================================"
 echo ""
