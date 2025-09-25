@@ -63,7 +63,7 @@ This allows you to review or modify the script before execution.
 - Dependencies managed by the script:  
   - [`figlet`](www.figtlet.com)  
   - [`curl`](https://github.com/curl/curl)
-  - [`lolcat-c`](https://github.com/jaseg/lolcat) (will attempt to build from source if missing)  
+  - [`lolcat-c`](https://github.com/jaseg/lolcat) (will attempt to build from source if missing; requires [`git`](https://git-scm.com/))  
 - Unicode support recommended for emojis in MOTD  
 - Can run **system-wide** (`/etc/motd`) or **per-user** (`~/.motd`)  
 
