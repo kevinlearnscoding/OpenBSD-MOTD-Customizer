@@ -299,70 +299,16 @@ done
 # EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
 weather_url="wttr.in/${city_url}?format=3${unit_suffix}" 
 
-# ===== Figlet Font Management for error handling =====
-DESIRED_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
+# ===== Update MISSING variable after package installation =====
+if command -v figlet >/dev/null 2>&1; then
+    MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
+    echo "figlet is now available for font management."
+fi
 
-check_figlet_fonts() {
-    local available_count=0
-    local missing_fonts=""
-    
-    for font in $DESIRED_FONTS; do
-        if figlet -f "$font" "test" >/dev/null 2>&1; then
-            available_count=$((available_count + 1))
-        else
-            missing_fonts="$missing_fonts $font"
-        fi
-    done
-    
-    echo "$available_count:$missing_fonts"
-}
+# ===== Comprehensive Figlet Font Management =====
+DEFAULT_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
 
-install_standard_fonts() {
-    echo "Downloading and installing standard figlet fonts..."
-    
-    # Create font directory
-    if [ "$(id -u)" -eq 0 ]; then
-        FONT_DIR="/usr/local/share/figlet"
-        mkdir -p "$FONT_DIR"
-    else
-        FONT_DIR="$HOME/.figlet"
-        mkdir -p "$FONT_DIR"
-        echo "Installing fonts to user directory: $FONT_DIR"
-    fi
-    
-    # Standard figlet.org font collection URLs
-    FONT_BASE_URL="http://www.figlet.org/fonts"
-    STANDARD_FONTS="3d 3x5 5lineoblique acrobatic alligator alphabet avatar banner basic bell big block broadway bubble bulbhead calgphy2 chunky coinstak colossal computer contessa cosmic crawford cyberlarge cybermedium cybersmal dancing decimal doh doom dotmatrix drpepper eftichess eftifont eftipiti eftirobot eftitalic eftiwall eftiwater electronic elite epic fender fire flowerpower fourtops fraktur fuzzy georgi georgia11x19 ghost goofy gothic graceful gradient graffiti greek henry3d hollywood invita isometric3 isometric4 ivrit jazmine jerusalem katakana kban larry3d lcd lean letters linux maxi mini mirror mnemonic morse moscow nancyj-fancy nancyj-improved nancyj niagara ntgreek o8 ogre old pawp pepper poison puffy rectangles relief relief2 rev roman rot13 rounded rowancap rozzo runic runyc sblood script serifcap shadow slant slide slscript small smisome1 smkeyboard smscript smshadow smslant speed stampatello standard starwars stellar stop straight tanja thick thin threepoint ticks times2 tinker-toy tombstone trek tubular twopoint univers usaflag varsity wavy weird whimsy"
-    
-    # Download fonts (subset of standard ones that are commonly used)
-    local success_count=0
-    local total_attempted=0
-    
-    for font in $STANDARD_FONTS; do
-        if echo "$DESIRED_FONTS" | grep -q "$font"; then
-            total_attempted=$((total_attempted + 1))
-            echo "Downloading $font.flf..."
-            if curl -s -o "$FONT_DIR/${font}.flf" "$FONT_BASE_URL/${font}.flf"; then
-                # Verify the font file is valid
-                if figlet -f "$font" "test" >/dev/null 2>&1; then
-                    success_count=$((success_count + 1))
-                    echo "✅ $font installed successfully"
-                else
-                    echo "⚠️  $font downloaded but may not be valid"
-                    rm -f "$FONT_DIR/${font}.flf"
-                fi
-            else
-                echo "❌ Failed to download $font"
-            fi
-        fi
-    done
-    
-    echo "Font installation complete: $success_count/$total_attempted fonts installed"
-    return 0
-}
-
-search_system_fonts() {
-    echo "Searching for available figlet fonts on system..."
+discover_system_fonts() {
     local found_fonts=""
     
     # Search common font directories
@@ -379,8 +325,8 @@ search_system_fonts() {
         fi
     done
     
-    # Also check built-in fonts by testing common ones
-    for font in standard small mini block lean; do
+    # Test for built-in/package fonts
+    for font in standard small mini block lean slant shadow big banner script bubble digital morse; do
         if figlet -f "$font" "test" >/dev/null 2>&1; then
             if ! echo "$found_fonts" | grep -q "$font"; then
                 found_fonts="$found_fonts $font"
@@ -391,76 +337,337 @@ search_system_fonts() {
     echo "$found_fonts"
 }
 
-# Main font management logic
-if echo "$MISSING" | grep -q "figlet"; then
-    echo "figlet will be installed via pkg_add, which includes basic fonts."
-else
-    # figlet is already installed, check for desired fonts
-    font_check=$(check_figlet_fonts)
-    available_count=$(echo "$font_check" | cut -d: -f1)
-    missing_fonts=$(echo "$font_check" | cut -d: -f2-)
+download_font_collection() {
+    local collection="$1"
+    local collection_url=""
     
-    if [ "$available_count" -eq 0 ]; then
-        echo "figlet is installed but none of the desired fonts are available."
-        echo "Missing fonts:$missing_fonts"
-        echo ""
-        echo "Options:"
-        echo "1) Download and install standard figlet fonts"
-        echo "2) Search system for existing fonts and edit the font list"
-        echo "3) Continue with basic fonts only"
-        echo "Enter 1, 2, or 3: "
-        read font_choice </dev/tty
-        
-        case "$font_choice" in
-            1)
-                if install_standard_fonts; then
-                    echo "Standard fonts installed successfully!"
-                else
-                    echo "Some fonts may have failed to install, but continuing..."
+    case "$collection" in
+        "ours")
+            collection_url="ftp://ftp.figlet.org/pub/figlet/fonts/ours.tar.gz"
+            ;;
+        "contributed")
+            collection_url="ftp://ftp.figlet.org/pub/figlet/fonts/contributed.tar.gz"
+            ;;
+        "international")
+            collection_url="ftp://ftp.figlet.org/pub/figlet/fonts/international.tar.gz"
+            ;;
+        "ms-dos")
+            collection_url="ftp://ftp.figlet.org/pub/figlet/fonts/ms-dos.tar.gz"
+            ;;
+        *)
+            echo "Unknown collection: $collection"
+            return 1
+            ;;
+    esac
+    
+    # Create font directory
+    if [ "$(id -u)" -eq 0 ]; then
+        FONT_DIR="/usr/local/share/figlet"
+        mkdir -p "$FONT_DIR"
+    else
+        FONT_DIR="$HOME/.figlet"
+        mkdir -p "$FONT_DIR"
+    fi
+    
+    # Create temporary directory
+    TMP_FONT_DIR=$(mktemp -d)
+    if [ ! -d "$TMP_FONT_DIR" ]; then
+        echo "❌ Failed to create temporary directory."
+        return 1
+    fi
+    
+    cd "$TMP_FONT_DIR" || { echo "❌ Failed to enter temp directory"; return 1; }
+    
+    echo "Downloading $collection collection..."
+    if curl -s -o "${collection}.tar.gz" "$collection_url"; then
+        echo "Extracting $collection fonts..."
+        if tar -xzf "${collection}.tar.gz"; then
+            local installed_count=0
+            for font_file in *.flf; do
+                if [ -f "$font_file" ]; then
+                    cp "$font_file" "$FONT_DIR/"
+                    installed_count=$((installed_count + 1))
                 fi
-                ;;
-            2)
-                system_fonts=$(search_system_fonts)
-                if [ -n "$system_fonts" ]; then
-                    echo ""
-                    echo "Available fonts found on system:"
-                    echo "$system_fonts" | tr ' ' '\n' | sort | column -c 80
-                    echo ""
-                    echo "Current font list: $DESIRED_FONTS"
-                    echo ""
-                    echo "Enter new font list (space-separated), or press Enter to keep current:"
-                    read new_font_list </dev/tty
-                    if [ -n "$new_font_list" ]; then
-                        DESIRED_FONTS="$new_font_list"
-                        echo "Font list updated to: $DESIRED_FONTS"
-                    fi
-                else
-                    echo "No additional fonts found. Using basic fonts."
-                fi
-                ;;
-            3)
-                echo "Continuing with basic fonts only."
-                DESIRED_FONTS="standard"
-                ;;
-            *)
-                echo "Invalid choice. Continuing with basic fonts."
-                DESIRED_FONTS="standard"
-                ;;
-        esac
-        
-    elif [ "$available_count" -lt 5 ]; then
-        echo "figlet is installed with $available_count desired fonts available."
-        echo "Missing fonts:$missing_fonts"
-        echo "Download additional fonts? (Y/N)"
-        read download_choice </dev/tty
-        download_choice=$(echo "$download_choice" | tr '[:lower:]' '[:upper:]')
-        
-        if [ "$download_choice" = "Y" ]; then
-            install_standard_fonts
+            done
+            echo "✅ Installed $installed_count fonts from $collection collection!"
+            cd ~ || true
+            rm -rf "$TMP_FONT_DIR"
+            return 0
+        else
+            echo "❌ Failed to extract $collection archive."
+            cd ~ || true
+            rm -rf "$TMP_FONT_DIR"
+            return 1
         fi
     else
-        echo "figlet is installed with $available_count fonts available. Good to go!"
+        echo "❌ Failed to download $collection collection."
+        cd ~ || true
+        rm -rf "$TMP_FONT_DIR"
+        return 1
     fi
+}
+
+validate_font_list() {
+    local font_list="$1"
+    local valid_fonts=""
+    local invalid_fonts=""
+    
+    for font in $font_list; do
+        if figlet -f "$font" "test" >/dev/null 2>&1; then
+            valid_fonts="$valid_fonts $font"
+        else
+            invalid_fonts="$invalid_fonts $font"
+        fi
+    done
+    
+    echo "$valid_fonts|$invalid_fonts"
+}
+
+# Main font management logic
+if command -v figlet >/dev/null 2>&1; then
+    echo ""
+    echo "===== Font Management Setup ====="
+    echo "figlet is installed. Let's configure your fonts!"
+    echo ""
+    
+    # Discover what's available
+    available_fonts=$(discover_system_fonts)
+    available_count=$(echo "$available_fonts" | wc -w)
+    
+    echo "Found $available_count fonts currently available on your system:"
+    if [ $available_count -gt 0 ]; then
+        echo "$available_fonts" | tr ' ' '\n' | sort | column -c 80
+    else
+        echo "None found."
+    fi
+    echo ""
+    
+    echo "Font Configuration Options:"
+    echo "1) Use fonts from base figlet installation only"
+    echo "2) Download additional font collections from figlet.org"
+    echo "3) Specify custom font directory path"
+    echo "4) Manually edit font rotation list"
+    echo "Enter your choice (1-4): "
+    read font_option </dev/tty
+    
+    case "$font_option" in
+        1)
+            echo "Using base installation fonts only."
+            if [ $available_count -gt 0 ]; then
+                echo "Available fonts: $available_fonts"
+                echo "Use all available fonts? (Y/N)"
+                read use_all </dev/tty
+                use_all=$(echo "$use_all" | tr '[:lower:]' '[:upper:]')
+                
+                if [ "$use_all" = "Y" ]; then
+                    DESIRED_FONTS="$available_fonts"
+                else
+                    echo "Enter space-separated list of fonts to use:"
+                    echo "Available: $available_fonts"
+                    read selected_fonts </dev/tty
+                    if [ -n "$selected_fonts" ]; then
+                        validation=$(validate_font_list "$selected_fonts")
+                        valid=$(echo "$validation" | cut -d'|' -f1)
+                        invalid=$(echo "$validation" | cut -d'|' -f2)
+                        
+                        if [ -n "$invalid" ]; then
+                            echo "⚠️  Invalid fonts (not available): $invalid"
+                        fi
+                        
+                        if [ -n "$valid" ]; then
+                            DESIRED_FONTS="$valid"
+                            echo "Using fonts: $valid"
+                        else
+                            echo "No valid fonts selected. Using fallback."
+                            DESIRED_FONTS="standard"
+                        fi
+                    else
+                        DESIRED_FONTS="standard"
+                    fi
+                fi
+            else
+                echo "No fonts found in base installation. Using 'standard' fallback."
+                DESIRED_FONTS="standard"
+            fi
+            ;;
+            
+        2)
+            echo "Available font collections:"
+            echo "  ours         - Standard figlet fonts (recommended)"
+            echo "  contributed  - User-contributed fonts"
+            echo "  international- International character sets"
+            echo "  ms-dos       - MS-DOS style fonts"
+            echo ""
+            echo "Enter collections to download (space-separated, e.g., 'ours contributed'):"
+            read collections </dev/tty
+            
+            if [ -n "$collections" ]; then
+                for collection in $collections; do
+                    download_font_collection "$collection"
+                done
+                
+                # Re-discover fonts after download
+                available_fonts=$(discover_system_fonts)
+                available_count=$(echo "$available_fonts" | wc -w)
+                echo ""
+                echo "Now have $available_count fonts available:"
+                echo "$available_fonts" | tr ' ' '\n' | sort | column -c 80
+                echo ""
+                echo "Use all downloaded fonts? (Y/N)"
+                read use_all_downloaded </dev/tty
+                use_all_downloaded=$(echo "$use_all_downloaded" | tr '[:lower:]' '[:upper:]')
+                
+                if [ "$use_all_downloaded" = "Y" ]; then
+                    DESIRED_FONTS="$available_fonts"
+                else
+                    echo "Enter space-separated list of fonts to use:"
+                    read selected_fonts </dev/tty
+                    if [ -n "$selected_fonts" ]; then
+                        validation=$(validate_font_list "$selected_fonts")
+                        valid=$(echo "$validation" | cut -d'|' -f1)
+                        invalid=$(echo "$validation" | cut -d'|' -f2)
+                        
+                        if [ -n "$invalid" ]; then
+                            echo "⚠️  Invalid fonts: $invalid"
+                        fi
+                        
+                        DESIRED_FONTS="${valid:-standard}"
+                    else
+                        DESIRED_FONTS="standard"
+                    fi
+                fi
+            else
+                echo "No collections selected. Using default fonts."
+                DESIRED_FONTS="$DEFAULT_FONTS"
+            fi
+            ;;
+            
+        3)
+            echo "Enter full path to figlet font directory:"
+            read custom_font_dir </dev/tty
+            
+            if [ -d "$custom_font_dir" ]; then
+                echo "Scanning $custom_font_dir for fonts..."
+                custom_fonts=""
+                for font_file in "$custom_font_dir"/*.flf; do
+                    if [ -f "$font_file" ]; then
+                        font_name=$(basename "$font_file" .flf)
+                        if figlet -d "$custom_font_dir" -f "$font_name" "test" >/dev/null 2>&1; then
+                            custom_fonts="$custom_fonts $font_name"
+                        fi
+                    fi
+                done
+                
+                if [ -n "$custom_fonts" ]; then
+                    custom_count=$(echo "$custom_fonts" | wc -w)
+                    echo "Found $custom_count fonts in $custom_font_dir:"
+                    echo "$custom_fonts" | tr ' ' '\n' | sort | column -c 80
+                    echo ""
+                    echo "Use all fonts from this directory? (Y/N)"
+                    read use_custom_all </dev/tty
+                    use_custom_all=$(echo "$use_custom_all" | tr '[:lower:]' '[:upper:]')
+                    
+                    if [ "$use_custom_all" = "Y" ]; then
+                        DESIRED_FONTS="$custom_fonts"
+                        # Note: This would require modifying the MOTD script to use -d flag
+                        echo "⚠️  Note: Using custom directory requires manual MOTD script editing"
+                        echo "    to add '-d $custom_font_dir' to figlet commands."
+                    else
+                        echo "Enter space-separated list of fonts to use:"
+                        read selected_custom </dev/tty
+                        DESIRED_FONTS="${selected_custom:-standard}"
+                    fi
+                else
+                    echo "No valid fonts found in $custom_font_dir"
+                    DESIRED_FONTS="standard"
+                fi
+            else
+                echo "Directory $custom_font_dir not found. Using defaults."
+                DESIRED_FONTS="$DEFAULT_FONTS"
+            fi
+            ;;
+            
+        4)
+            echo "Current default font list: $DEFAULT_FONTS"
+            echo ""
+            echo "These fonts are included with this script by default."
+            echo "Enter your custom font rotation list (space-separated):"
+            echo "Or press Enter to use defaults."
+            read custom_list </dev/tty
+            
+            if [ -n "$custom_list" ]; then
+                echo "Validating fonts..."
+                validation=$(validate_font_list "$custom_list")
+                valid=$(echo "$validation" | cut -d'|' -f1)
+                invalid=$(echo "$validation" | cut -d'|' -f2)
+                
+                if [ -n "$invalid" ]; then
+                    echo "⚠️  These fonts are not available and will be skipped: $invalid"
+                    echo "Do you want to:"
+                    echo "  1) Continue with valid fonts only: $valid"
+                    echo "  2) Download missing fonts (if available in collections)"
+                    echo "  3) Use default font list instead"
+                    read invalid_choice </dev/tty
+                    
+                    case "$invalid_choice" in
+                        1)
+                            DESIRED_FONTS="${valid:-standard}"
+                            ;;
+                        2)
+                            echo "Attempting to download standard collection to get missing fonts..."
+                            download_font_collection "ours"
+                            # Re-validate after download
+                            validation=$(validate_font_list "$custom_list")
+                            valid=$(echo "$validation" | cut -d'|' -f1)
+                            invalid=$(echo "$validation" | cut -d'|' -f2)
+                            
+                            if [ -n "$invalid" ]; then
+                                echo "Still missing: $invalid"
+                                echo "Using available fonts: $valid"
+                            fi
+                            DESIRED_FONTS="${valid:-standard}"
+                            ;;
+                        3)
+                            DESIRED_FONTS="$DEFAULT_FONTS"
+                            ;;
+                        *)
+                            DESIRED_FONTS="${valid:-standard}"
+                            ;;
+                    esac
+                else
+                    DESIRED_FONTS="$valid"
+                    echo "✅ All fonts validated successfully!"
+                fi
+            else
+                DESIRED_FONTS="$DEFAULT_FONTS"
+                echo "Using default font list."
+            fi
+            ;;
+            
+        *)
+            echo "Invalid choice. Using default font configuration."
+            DESIRED_FONTS="$DEFAULT_FONTS"
+            ;;
+    esac
+    
+    # Final validation and summary
+    final_validation=$(validate_font_list "$DESIRED_FONTS")
+    final_valid=$(echo "$final_validation" | cut -d'|' -f1)
+    final_invalid=$(echo "$final_validation" | cut -d'|' -f2)
+    
+    if [ -n "$final_invalid" ]; then
+        echo "⚠️  Final check - removing unavailable fonts: $final_invalid"
+        DESIRED_FONTS="$final_valid"
+    fi
+    
+    final_count=$(echo "$DESIRED_FONTS" | wc -w)
+    echo ""
+    echo "✅ Font configuration complete!"
+    echo "Using $final_count fonts in rotation: $DESIRED_FONTS"
+    
+else
+    echo "figlet is not available. Using fallback configuration."
+    DESIRED_FONTS="standard"
 fi
 
 # Update FONT_LIST variable for use in MOTD script
@@ -468,7 +675,7 @@ FONT_LIST="$DESIRED_FONTS"
 
 # === FILE CREATION SECTION ===
 # ===== CREATE DYNAMIC MOTD SCRIPT =====
-cat << 'MOTD_GENERATOR_SCRIPT > "$MOTD_SCRIPT"
+cat << MOTD_GENERATOR_SCRIPT > "$MOTD_SCRIPT"
 #!/bin/sh
 
 # ====== WELCOME! =====
@@ -567,8 +774,8 @@ echo "Font used: \$FOUND_FONT"
 divider | colorize
 echo " 🖥️ Hostname : \$(hostname)"
 echo " ⏱️ Uptime   : \$(uptime | sed 's/.*up //; s/,.*//' | awk '{\$1=\$1};1')"
-echo " 🧠 Memory    : \$(get_mem_info)"
-echo " 💽 Disk      : \$(get_disk_info)"
+echo " 🧠 Memory   : \$(get_mem_info)"
+echo " 💽 Disk     : \$(get_disk_info)"
 divider | colorize
 if has_cmd curl; then
     echo " 🌦️  Weather:"
