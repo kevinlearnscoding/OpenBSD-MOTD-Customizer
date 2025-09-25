@@ -87,13 +87,15 @@ if echo "$MISSING" | grep -q "lolcat"; then
     echo "lolcat is missing. Options:"
     echo "1) Build lolcat yourself and rerun this script later"
     echo "2) Let the script build lolcat for you now"
-    echo "Enter 1 or 2: " 
+    echo "Enter 1 or 2: "
     read lol_choice </dev/tty
+
     if [ "$lol_choice" = "1" ]; then
         echo "Please build lolcat manually from https://github.com/jaseg/lolcat and rerun this script."
         exit 0
+
     elif [ "$lol_choice" = "2" ]; then
-                    echo "Building lolcat from source..."
+        echo "Building lolcat from source..."
 
         # Ensure curl or ftp is available
         if command -v curl >/dev/null 2>&1; then
@@ -106,38 +108,42 @@ if echo "$MISSING" | grep -q "lolcat"; then
         fi
 
         TMP_DIR=$(mktemp -d)
-        cd "$TMP_DIR" || exit 1
+        cd "$TMP_DIR" || { echo "Failed to enter temp directory. Exiting."; exit 1; }
 
         echo "Downloading lolcat source..."
         if $FETCH_CMD lolcat.tar.gz https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz; then
-            echo "Extracting..."
-            tar -xzf lolcat.tar.gz
-            cd lolcat-master || exit 1
+            echo "Extracting source..."
+            tar -xzf lolcat.tar.gz || { echo "Failed to extract archive. Exiting."; exit 1; }
+            cd lolcat-master || { echo "Source directory missing. Exiting."; exit 1; }
 
-            echo "Compiling..."
+            echo "Compiling and installing..."
             if make && make install; then
-                echo "lolcat built and installed successfully!"
-                MISSING=$(echo "$MISSING" | sed 's/lolcat//')
+                echo "✅ lolcat built and installed successfully!"
+                # Remove lolcat from missing list
+                MISSING=$(echo "$MISSING" | sed 's/lolcat//g')
             else
                 echo "❌ Build or install failed. You can retry manually from:"
                 echo "   $TMP_DIR/lolcat-master"
                 exit 1
             fi
         else
-            echo "❌ Failed to fetch lolcat source via curl."
-            echo "You can manually download:"
+            echo "❌ Failed to download lolcat source."
+            echo "You can manually download from:"
             echo "  https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz"
             exit 1
         fi
 
+        # Cleanup
         cd ~ || true
         rm -rf "$TMP_DIR"
         echo "lolcat built successfully, resuming script..."
+
     else
         echo "Invalid choice. Exiting."
         exit 1
     fi
 fi
+
 
 
 # ===== Install other missing packages =====
