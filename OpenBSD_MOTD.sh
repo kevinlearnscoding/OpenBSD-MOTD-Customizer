@@ -15,18 +15,20 @@
 # ===== START OF THE SCRIPT =====
 set -e
 
-echo "============================= Welcome! ==============================="
-echo "This script will check for/install: lolcat, curl, and figlet." 
-echo "It will then set up a few customizations such as a custom banner in a"
-echo "fun text effect, and also getting system stats and the current weather."
-echo "This message displays at each login, even from SSH connections."
-echo "figlet and curl are available via pkg_add. lolcat will most likely need"
-echo "to be compiled from source. If you would like to build/install lolcat"
-echo "yourself, please do so now. If not, the script will offer to build and"
-echo "install it for you."  
-echo ""
-echo "Let's get started!"
-echo ""
+cat << EOF
+============================= Welcome! ===============================
+This script will check for/install: lolcat, curl, and figlet.
+It will then set up a few customizations such as a custom banner in a
+fun text effect, and also getting system stats and the current weather.
+This message displays at each login, even from SSH connections.
+figlet and curl are available via pkg_add. lolcat will most likely need
+to be compiled from source. If you would like to build/install lolcat
+yourself, please do so now. If not, the script will offer to build and
+install it for you.
+
+Let's get started!
+
+EOF
 
 # ===== Check if running as root =====
 if [ "$(id -u)" -ne 0 ]; then
@@ -84,62 +86,138 @@ done
 
 # ===== lolcat build logic =====
 if echo "$MISSING" | grep -q "lolcat"; then
-    echo "lolcat is missing. Options:"
+    echo "lolcat is required to run, and is not yet installed. Options:"
     echo "1) Build lolcat yourself and rerun this script later"
-    echo "2) Let the script build lolcat for you now"
+    echo "2) Let the script build the high-quality jaseg version for you"
     echo "Enter 1 or 2: "
     read lol_choice </dev/tty
 
     if [ "$lol_choice" = "1" ]; then
-        echo "Please build lolcat manually from https://github.com/jaseg/lolcat and rerun this script."
+        echo "Please build lolcat manually from"
+        echo "https://github.com/jaseg/lolcat and rerun this script."
+        echo "(We recommend jaseg's version for its vibrant colors)"
         exit 0
 
     elif [ "$lol_choice" = "2" ]; then
         echo "Building lolcat from source..."
 
-        # Ensure curl or ftp is available
-        if command -v curl >/dev/null 2>&1; then
-            FETCH_CMD="curl -L -o"
-        elif command -v ftp >/dev/null 2>&1; then
-            FETCH_CMD="ftp -o"
-        else
-            echo "Neither curl nor ftp found. Please install one and rerun."
+        # Check if git is available, install if needed
+        if ! command -v git >/dev/null 2>&1; then
+            echo "git is required for building lolcat."
+            echo "Install git? (Y/N)"
+            read git_install </dev/tty
+            git_install=$(echo "$git_install" | tr '[:lower:]' '[:upper:]')
+            
+            if [ "$git_install" = "Y" ]; then
+                echo "Installing git..."
+                if [ "$(id -u)" -eq 0 ]; then
+                    if pkg_add git; then
+                        echo "✅ git installed successfully!"
+                    else
+                        echo "❌ Failed to install git."
+                        exit 1
+                    fi
+                else
+                    echo "❌ Installing git requires root privileges."
+                    echo "Please run as root or install git manually: doas pkg_add git"
+                    exit 1
+                fi
+            else
+                echo "Cannot build lolcat without git. Please install git and rerun this script."
+                exit 1
+            fi
+        fi
+
+        # Create temporary directory
+        TMP_DIR=$(mktemp -d)
+        if [ ! -d "$TMP_DIR" ]; then
+            echo "❌ Failed to create temporary directory."
             exit 1
         fi
 
-        TMP_DIR=$(mktemp -d)
-        cd "$TMP_DIR" || { echo "Failed to enter temp directory. Exiting."; exit 1; }
+        cd "$TMP_DIR" || { echo "❌ Failed to enter temp directory. Exiting."; exit 1; }
 
-        echo "Downloading lolcat source..."
-        if $FETCH_CMD lolcat.tar.gz https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz; then
-            echo "Extracting source..."
-            tar -xzf lolcat.tar.gz || { echo "Failed to extract archive. Exiting."; exit 1; }
-            cd lolcat-master || { echo "Source directory missing. Exiting."; exit 1; }
-
-            echo "Compiling and installing..."
-            if make && make install; then
-                echo "✅ lolcat built and installed successfully!"
-                # Remove lolcat from missing list
-                MISSING=$(echo "$MISSING" | sed 's/lolcat//g')
+        # Cloning lolcat repository
+        if git clone https://github.com/jaseg/lolcat.git; then
+            cd lolcat || { echo "❌ Failed to enter cloned directory."; exit 1; }
+            
+            # Initializing git submodules
+            if git submodule init && git submodule update; then
+                :
             else
-                echo "❌ Build or install failed. You can retry manually from:"
-                echo "   $TMP_DIR/lolcat-master"
+                echo "❌ Failed to initialize git submodules."
+                echo "This is required for jaseg/lolcat build process."
+                exit 1
+            fi
+
+            # Compiling lolcat
+            # Build with explicit make target
+            if make lolcat; then
+                :
+                if [ "$(id -u)" -eq 0 ]; then
+                    # Running as root - install system-wide
+                    if make install PREFIX=/usr/local; then
+                        :
+                        # Update PATH if needed for immediate use
+                        export PATH="/usr/local/bin:$PATH"
+                    else
+                        echo "❌ Installation failed."
+                        echo "Build completed in: $TMP_DIR/lolcat"
+                        echo "To install manually:"
+                        echo "   cd $TMP_DIR/lolcat"
+                        echo "   doas make install"
+                        exit 1
+                    fi
+                else
+                    # Not root - try to install to user's home
+                    USER_BIN="$HOME/bin"
+                    mkdir -p "$USER_BIN"
+                    if cp lolcat "$USER_BIN/" && chmod +x "$USER_BIN/lolcat"; then
+                        :
+                        # Add to PATH for this session
+                        export PATH="$USER_BIN:$PATH"
+                    else
+                        echo "❌ Failed to install to $USER_BIN."
+                        echo "Build completed in: $TMP_DIR/lolcat"
+                        echo "To install manually as root:"
+                        echo "   cd $TMP_DIR/lolcat"
+                        echo "   doas make install"
+                        exit 1
+                    fi
+                fi
+                
+                # Remove lolcat from missing list since we built it
+                MISSING=$(echo "$MISSING" | sed 's/lolcat//g' | sed 's/^ *//' | sed 's/ *$//')
+                
+                # Verify installation
+                if command -v lolcat >/dev/null 2>&1; then
+                    :
+                else
+                    echo "⚠️  lolcat built but may not be in PATH. You may need to:"
+                    echo "   export PATH=/usr/local/bin:\$PATH"
+                    echo "   or add it to your shell profile"
+                fi
+            else
+                echo "❌ Compilation failed."
+                echo "Build directory preserved at: $TMP_DIR/lolcat"
+                echo "Common issues:"
+                echo "   - Submodules not properly initialized"
+                echo "   - Missing build dependencies"
+                echo "   - Network issues during submodule download"
                 exit 1
             fi
         else
-            echo "❌ Failed to download lolcat source."
-            echo "You can manually download from:"
-            echo "  https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz"
+            echo "❌ Failed to clone lolcat repository from GitHub."
+            echo "Check your internet connection and try again."
             exit 1
         fi
 
-        # Cleanup
+        # Cleanup on success
         cd ~ || true
         rm -rf "$TMP_DIR"
-        echo "lolcat built successfully, resuming script..."
 
     else
-        echo "Invalid choice. Exiting."
+        echo "Invalid choice. Please enter 1 or 2."
         exit 1
     fi
 fi
@@ -221,9 +299,176 @@ done
 # EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
 weather_url="wttr.in/${city_url}?format=3${unit_suffix}" 
 
+# ===== Figlet Font Management for error handling =====
+DESIRED_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
+
+check_figlet_fonts() {
+    local available_count=0
+    local missing_fonts=""
+    
+    for font in $DESIRED_FONTS; do
+        if figlet -f "$font" "test" >/dev/null 2>&1; then
+            available_count=$((available_count + 1))
+        else
+            missing_fonts="$missing_fonts $font"
+        fi
+    done
+    
+    echo "$available_count:$missing_fonts"
+}
+
+install_standard_fonts() {
+    echo "Downloading and installing standard figlet fonts..."
+    
+    # Create font directory
+    if [ "$(id -u)" -eq 0 ]; then
+        FONT_DIR="/usr/local/share/figlet"
+        mkdir -p "$FONT_DIR"
+    else
+        FONT_DIR="$HOME/.figlet"
+        mkdir -p "$FONT_DIR"
+        echo "Installing fonts to user directory: $FONT_DIR"
+    fi
+    
+    # Standard figlet.org font collection URLs
+    FONT_BASE_URL="http://www.figlet.org/fonts"
+    STANDARD_FONTS="3d 3x5 5lineoblique acrobatic alligator alphabet avatar banner basic bell big block broadway bubble bulbhead calgphy2 chunky coinstak colossal computer contessa cosmic crawford cyberlarge cybermedium cybersmal dancing decimal doh doom dotmatrix drpepper eftichess eftifont eftipiti eftirobot eftitalic eftiwall eftiwater electronic elite epic fender fire flowerpower fourtops fraktur fuzzy georgi georgia11x19 ghost goofy gothic graceful gradient graffiti greek henry3d hollywood invita isometric3 isometric4 ivrit jazmine jerusalem katakana kban larry3d lcd lean letters linux maxi mini mirror mnemonic morse moscow nancyj-fancy nancyj-improved nancyj niagara ntgreek o8 ogre old pawp pepper poison puffy rectangles relief relief2 rev roman rot13 rounded rowancap rozzo runic runyc sblood script serifcap shadow slant slide slscript small smisome1 smkeyboard smscript smshadow smslant speed stampatello standard starwars stellar stop straight tanja thick thin threepoint ticks times2 tinker-toy tombstone trek tubular twopoint univers usaflag varsity wavy weird whimsy"
+    
+    # Download fonts (subset of standard ones that are commonly used)
+    local success_count=0
+    local total_attempted=0
+    
+    for font in $STANDARD_FONTS; do
+        if echo "$DESIRED_FONTS" | grep -q "$font"; then
+            total_attempted=$((total_attempted + 1))
+            echo "Downloading $font.flf..."
+            if curl -s -o "$FONT_DIR/${font}.flf" "$FONT_BASE_URL/${font}.flf"; then
+                # Verify the font file is valid
+                if figlet -f "$font" "test" >/dev/null 2>&1; then
+                    success_count=$((success_count + 1))
+                    echo "✅ $font installed successfully"
+                else
+                    echo "⚠️  $font downloaded but may not be valid"
+                    rm -f "$FONT_DIR/${font}.flf"
+                fi
+            else
+                echo "❌ Failed to download $font"
+            fi
+        fi
+    done
+    
+    echo "Font installation complete: $success_count/$total_attempted fonts installed"
+    return 0
+}
+
+search_system_fonts() {
+    echo "Searching for available figlet fonts on system..."
+    local found_fonts=""
+    
+    # Search common font directories
+    for font_dir in "/usr/local/share/figlet" "/usr/share/figlet" "$HOME/.figlet"; do
+        if [ -d "$font_dir" ]; then
+            for font_file in "$font_dir"/*.flf; do
+                if [ -f "$font_file" ]; then
+                    font_name=$(basename "$font_file" .flf)
+                    if figlet -f "$font_name" "test" >/dev/null 2>&1; then
+                        found_fonts="$found_fonts $font_name"
+                    fi
+                fi
+            done
+        fi
+    done
+    
+    # Also check built-in fonts by testing common ones
+    for font in standard small mini block lean; do
+        if figlet -f "$font" "test" >/dev/null 2>&1; then
+            if ! echo "$found_fonts" | grep -q "$font"; then
+                found_fonts="$found_fonts $font"
+            fi
+        fi
+    done
+    
+    echo "$found_fonts"
+}
+
+# Main font management logic
+if echo "$MISSING" | grep -q "figlet"; then
+    echo "figlet will be installed via pkg_add, which includes basic fonts."
+else
+    # figlet is already installed, check for desired fonts
+    font_check=$(check_figlet_fonts)
+    available_count=$(echo "$font_check" | cut -d: -f1)
+    missing_fonts=$(echo "$font_check" | cut -d: -f2-)
+    
+    if [ "$available_count" -eq 0 ]; then
+        echo "figlet is installed but none of the desired fonts are available."
+        echo "Missing fonts:$missing_fonts"
+        echo ""
+        echo "Options:"
+        echo "1) Download and install standard figlet fonts"
+        echo "2) Search system for existing fonts and edit the font list"
+        echo "3) Continue with basic fonts only"
+        echo "Enter 1, 2, or 3: "
+        read font_choice </dev/tty
+        
+        case "$font_choice" in
+            1)
+                if install_standard_fonts; then
+                    echo "Standard fonts installed successfully!"
+                else
+                    echo "Some fonts may have failed to install, but continuing..."
+                fi
+                ;;
+            2)
+                system_fonts=$(search_system_fonts)
+                if [ -n "$system_fonts" ]; then
+                    echo ""
+                    echo "Available fonts found on system:"
+                    echo "$system_fonts" | tr ' ' '\n' | sort | column -c 80
+                    echo ""
+                    echo "Current font list: $DESIRED_FONTS"
+                    echo ""
+                    echo "Enter new font list (space-separated), or press Enter to keep current:"
+                    read new_font_list </dev/tty
+                    if [ -n "$new_font_list" ]; then
+                        DESIRED_FONTS="$new_font_list"
+                        echo "Font list updated to: $DESIRED_FONTS"
+                    fi
+                else
+                    echo "No additional fonts found. Using basic fonts."
+                fi
+                ;;
+            3)
+                echo "Continuing with basic fonts only."
+                DESIRED_FONTS="standard"
+                ;;
+            *)
+                echo "Invalid choice. Continuing with basic fonts."
+                DESIRED_FONTS="standard"
+                ;;
+        esac
+        
+    elif [ "$available_count" -lt 5 ]; then
+        echo "figlet is installed with $available_count desired fonts available."
+        echo "Missing fonts:$missing_fonts"
+        echo "Download additional fonts? (Y/N)"
+        read download_choice </dev/tty
+        download_choice=$(echo "$download_choice" | tr '[:lower:]' '[:upper:]')
+        
+        if [ "$download_choice" = "Y" ]; then
+            install_standard_fonts
+        fi
+    else
+        echo "figlet is installed with $available_count fonts available. Good to go!"
+    fi
+fi
+
+# Update FONT_LIST variable for use in MOTD script
+FONT_LIST="$DESIRED_FONTS"
+
 # === FILE CREATION SECTION ===
 # ===== CREATE DYNAMIC MOTD SCRIPT =====
-cat << EOF > "$MOTD_SCRIPT"
+cat << MOTD_GENERATOR_SCRIPT > "$MOTD_SCRIPT"
 #!/bin/sh
 
 # ====== WELCOME! =====
@@ -239,7 +484,7 @@ cat << EOF > "$MOTD_SCRIPT"
 # For weather reports adjustments see "wttr.in/:help" for more info
 
 NAME="$banner_text" # EDIT THIS LINE TO CHANGE YOUR BANNER TEXT
-FONT_LIST="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
+FONT_LIST="$FONT_LIST"
 STATE_FILE="/tmp/motd_font_index"
 
 has_cmd() { command -v "\$1" >/dev/null 2>&1; }
@@ -251,7 +496,6 @@ colorize() {
         cat
     fi
 }
-
 divider() {
     printf "%s\n" "------------------------------------------------------------"
 }
@@ -259,35 +503,41 @@ divider() {
 # ===== Font Rotation with skip if not installed =====
 set -- $FONT_LIST
 NUM_FONTS=$#
-if [ -f "$STATE_FILE" ]; then
-    INDEX=$(cat "$STATE_FILE")
+
+# Handle case where no fonts are available
+if [ $NUM_FONTS -eq 0 ]; then
+    FOUND_FONT="standard"
 else
-    INDEX=0
-fi
-
-FOUND_FONT=""
-count=0
-for FONT in "$@"; do
-    if [ $count -ge $INDEX ]; then
-        if figlet -f "$FONT" "test" >/dev/null 2>&1; then
-            FOUND_FONT="$FONT"
-            break
-        else
-            echo "⚠ Font '$FONT' not installed."
-            echo "  Edit font list in $MOTD_SCRIPT"
-            echo "  Download fonts: https://www.figlet.org"
-            echo "  Install fonts in /usr/local/share/figlet or ~/.figlet"
-        fi
+    if [ -f "$STATE_FILE" ]; then
+        INDEX=$(cat "$STATE_FILE")
+    else
+        INDEX=0
     fi
-    count=$((count + 1))
-done
 
-# Fallback
-[ -z "$FOUND_FONT" ] && FOUND_FONT="standard"
+    FOUND_FONT=""
+    count=0
+    for FONT in "$@"; do
+        if [ $count -ge $INDEX ]; then
+            if figlet -f "$FONT" "test" >/dev/null 2>&1; then
+                FOUND_FONT="$FONT"
+                break
+            else
+                echo "⚠ Font '$FONT' not installed."
+                echo "  Edit font list in $MOTD_SCRIPT"
+                echo "  Download fonts: https://www.figlet.org"
+                echo "  Install fonts in /usr/local/share/figlet or ~/.figlet"
+            fi
+        fi
+        count=$((count + 1))
+    done
 
-# Save next index
-NEXT_INDEX=$(( (INDEX + 1) % NUM_FONTS ))
-echo "$NEXT_INDEX" > "$STATE_FILE"
+    # Fallback
+    [ -z "$FOUND_FONT" ] && FOUND_FONT="standard"
+
+    # Save next index (only if we have fonts)
+    NEXT_INDEX=$(( (INDEX + 1) % NUM_FONTS ))
+    echo "$NEXT_INDEX" > "$STATE_FILE"
+fi
 
 
 # ===== Memory Info (OpenBSD) =====
@@ -327,7 +577,7 @@ fi
 echo
 divider | colorize
 echo
-EOF
+MOTD_GENERATOR_SCRIPT
 
 chmod +x "$MOTD_SCRIPT"
 
