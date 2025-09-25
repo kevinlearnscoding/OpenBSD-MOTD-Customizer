@@ -18,7 +18,7 @@ set -e
 echo "============================= Welcome! ==============================="
 echo "This script will check for/install: lolcat, curl, and figlet." 
 echo "It will then set up a few customizations such as a custom banner in a"
-echo "fun text effect, and also get system stats and the current weather."
+echo "fun text effect, and also getting system stats and the current weather."
 echo "This message displays at each login, even from SSH connections."
 echo "figlet and curl are available via pkg_add. lolcat will most likely need"
 echo "to be compiled from source. If you would like to build/install lolcat"
@@ -82,40 +82,56 @@ for cmd in $REQUIRED_CMDS; do
     fi
 done
 
-# ===== lolcat-c build logic =====
+# ===== lolcat build logic =====
 if echo "$MISSING" | grep -q "lolcat"; then
     echo "lolcat is missing. Options:"
-    echo "1) Build lolcat-c yourself and rerun this script later"
-    echo "2) Let the script build lolcat-c for you now"
+    echo "1) Build lolcat yourself and rerun this script later"
+    echo "2) Let the script build lolcat for you now"
     echo "Enter 1 or 2: " 
     read lol_choice </dev/tty
     if [ "$lol_choice" = "1" ]; then
-        echo "Please build lolcat-c manually from https://github.com/busyloop/lolcat-c and rerun this script."
+        echo "Please build lolcat manually from https://github.com/jaseg/lolcat and rerun this script."
         exit 0
     elif [ "$lol_choice" = "2" ]; then
-        # Check for git
-        if ! command -v git >/dev/null 2>&1; then
-            echo "git is required to clone lolcat-c."
-            echo "Install git via pkg_add? (Y/N): " 
-            read git_choice </dev/tty
-            git_choice=$(echo "$git_choice" | tr '[:lower:]' '[:upper:]')
-            if [ "$git_choice" = "Y" ]; then
-                pkg_add git || { echo "Failed to install git. Exiting."; exit 1; }
-            else
-                echo "Cannot build lolcat-c without git. Exiting."
-                exit 1
-            fi
+                    echo "Building lolcat from source..."
+
+        # Ensure curl or ftp is available
+        if command -v curl >/dev/null 2>&1; then
+            FETCH_CMD="curl -L -o"
+        elif command -v ftp >/dev/null 2>&1; then
+            FETCH_CMD="ftp -o"
+        else
+            echo "Neither curl nor ftp found. Please install one and rerun."
+            exit 1
         fi
 
-        echo "Building lolcat-c..."
         TMP_DIR=$(mktemp -d)
-        git clone https://github.com/busyloop/lolcat-c.git "$TMP_DIR/lolcat-c"
-        cd "$TMP_DIR/lolcat-c"
-        make
-        make install
-        cd -
+        cd "$TMP_DIR" || exit 1
+
+        echo "Downloading lolcat source..."
+        if $FETCH_CMD lolcat.tar.gz https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz; then
+            echo "Extracting..."
+            tar -xzf lolcat.tar.gz
+            cd lolcat-master || exit 1
+
+            echo "Compiling..."
+            if make && make install; then
+                echo "lolcat built and installed successfully!"
+                MISSING=$(echo "$MISSING" | sed 's/lolcat//')
+            else
+                echo "❌ Build or install failed. You can retry manually from:"
+                echo "   $TMP_DIR/lolcat-master"
+                exit 1
+            fi
+        else
+            echo "❌ Failed to fetch lolcat source via curl."
+            echo "You can manually download:"
+            echo "  https://github.com/jaseg/lolcat/archive/refs/heads/master.tar.gz"
+            exit 1
+        fi
+
+        cd ~ || true
         rm -rf "$TMP_DIR"
-        MISSING=$(echo "$MISSING" | sed 's/lolcat//')
         echo "lolcat built successfully, resuming script..."
     else
         echo "Invalid choice. Exiting."
@@ -123,17 +139,31 @@ if echo "$MISSING" | grep -q "lolcat"; then
     fi
 fi
 
+
 # ===== Install other missing packages =====
 OTHER_MISSING=$(echo "$MISSING" | xargs)
-if [ ! -z "$OTHER_MISSING" ]; then
-    echo "The following required programs are missing:$OTHER_MISSING"
+if [ -n "$OTHER_MISSING" ]; then
+    echo "The following required programs are missing: $OTHER_MISSING"
     echo "Install via: pkg_add $OTHER_MISSING ? (Y/N)"
     read install_choice </dev/tty
     install_choice=$(echo "$install_choice" | tr '[:lower:]' '[:upper:]')
+
     if [ "$install_choice" = "Y" ]; then
-        pkg_add $OTHER_MISSING || echo "Some packages failed to install. Please install manually."
+        if ! pkg_add $OTHER_MISSING; then
+            echo "Some packages failed to install."
+            echo "Would you like to retry? (Y/N): "
+            read retry </dev/tty
+            retry=$(echo "$retry" | tr '[:lower:]' '[:upper:]')
+            if [ "$retry" = "Y" ]; then
+                pkg_add $OTHER_MISSING || { echo "Still failing. Exiting."; exit 1; }
+            else
+                echo "Exiting."
+                exit 1
+            fi
+        fi
     fi
 fi
+
 
 # ===== USER INPUT =====
 
@@ -271,12 +301,13 @@ get_disk_info() {
 # ===== MOTD Output =====
 echo
 if has_cmd figlet; then
-    figlet -f "\$FONT" "\$NAME" | colorize
+    figlet -f "\$FOUND_FONT" "\$NAME" | colorize
 else
     echo "\$NAME" | colorize
 fi
 echo ""
-echo "Font used: \$FONT"
+echo "Font used: \$FOUND_FONT"
+
 divider | colorize
 echo " 🖥️ Hostname : \$(hostname)"
 echo " ⏱️ Uptime   : \$(uptime | sed 's/.*up //; s/,.*//' | awk '{\$1=\$1};1')"
