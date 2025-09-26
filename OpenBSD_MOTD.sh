@@ -15,6 +15,7 @@
 # ===== START OF THE SCRIPT =====
 set -e
 
+# Welcome message
 cat << EOF
 ============================= Welcome! ===============================
 This script will check for/install: lolcat, curl, and figlet.
@@ -57,12 +58,14 @@ if [ "$motd_type" = "S" ]; then
     MOTD_BACKUP="/etc/motd.backup"
     MOTD_SCRIPT="/usr/local/bin/rc.motd_openbsd"
     PROFILE_FILE="/etc/profile"
+    STATE_FILE_LOCATION="/var/tmp/motd_font_index"
 elif [ "$motd_type" = "U" ]; then
     HOME_DIR=$(eval echo ~"$USER")
     MOTD_FILE="$HOME_DIR/.motd"
     MOTD_BACKUP="$HOME_DIR/.motd.backup"
     MOTD_SCRIPT="$HOME_DIR/.motd_openbsd"
     PROFILE_FILE="$HOME_DIR/.profile"
+    STATE_FILE_LOCATION="$HOME_DIR/.cache/motd_font_index"
 else
     echo "Invalid choice. Please enter 'S' for system wide or 'U' for just your user."
     echo "Press Ctrl+C to exit script"
@@ -222,57 +225,54 @@ if echo "$MISSING" | grep -q "lolcat"; then
     fi
 fi
 
-
-
 # ===== Install other missing packages =====
 OTHER_MISSING=$(echo "$MISSING" | xargs)
-if [ -n "$OTHER_MISSING" ]; then
-    echo "The following required programs are missing: $OTHER_MISSING"
-    echo "Install via: pkg_add $OTHER_MISSING ? (Y/N)"
-    read install_choice </dev/tty
-    install_choice=$(echo "$install_choice" | tr '[:lower:]' '[:upper:]')
 
-    if [ "$install_choice" = "Y" ]; then
-        if ! pkg_add $OTHER_MISSING; then
-            echo "Some packages failed to install."
-            echo "Would you like to retry? (Y/N): "
-            read retry </dev/tty
-            retry=$(echo "$retry" | tr '[:lower:]' '[:upper:]')
-            if [ "$retry" = "Y" ]; then
-                pkg_add $OTHER_MISSING || { echo "Still failing. Exiting."; exit 1; }
+            if [ -d "$custom_font_dir" ]; then
+                echo "Scanning $custom_font_dir for fonts..."
+                custom_fonts=""
+                for font_file in "$custom_font_dir"/*.flf; do
+                    if [ -f "$font_file" ]; then
+                        font_name=$(basename "$font_file" .flf)
+                        if figlet -d "$custom_font_dir" -f "$font_name" "test" >/dev/null 2>&1; then
+                            custom_fonts="$custom_fonts $font_name"
+                        fi
+                    fi
+                done
+
+                if [ -n "$custom_fonts" ]; then
+                    custom_count=$(echo "$custom_fonts" | wc -w)
+                    echo "Found $custom_count fonts in $custom_font_dir:"
+                    echo "$custom_fonts" | tr ' ' '\n' | sort | column -c 80
+                    echo ""
+                    echo "Use all fonts from this directory? (Y/N)"
+                    read use_custom_all </dev/tty
+                    use_custom_all=$(echo "$use_custom_all" | tr '[:lower:]' '[:upper:]')
+
+                    if [ "$use_custom_all" = "Y" ]; then
+                        DESIRED_FONTS="$custom_fonts"
+                        CUSTOM_FONT_DIR="$custom_font_dir"
+                        FIGLET_CMD="figlet -d \"$custom_font_dir\" -f \"\$FOUND_FONT\" \"\$NAME\""
+                    else
+                        echo "Enter space-separated list of fonts to use:"
+                        read selected_custom </dev/tty
+                        DESIRED_FONTS="${selected_custom:-standard}"
+                        if [ -n "$selected_custom" ]; then
+                            FIGLET_CMD="figlet -d \"$custom_font_dir\" -f \"\$FOUND_FONT\" \"\$NAME\""
+                        else
+                            FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
+                        fi
+                    fi
+                else
+                    echo "No valid fonts found in $custom_font_dir. Falling back to 'standard' font."
+                    DESIRED_FONTS="standard"
+                    FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
+                fi
             else
-                echo "Exiting."
-                exit 1
+                echo "Directory $custom_font_dir not found. Using defaults. Falling back to 'standard' font."
+                DESIRED_FONTS="standard"
+                FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
             fi
-        fi
-    fi
-fi
-
-
-# ===== USER INPUT =====
-
-# =================== USER INPUT FOR BANNER TEXT ==================== 
-# DO NOT EDIT THIS SECTION!
-# TO EDIT YOUR BANNER TEXT RUN THE SCRIPT THEN EDIT AS PER INTRO ABOVE
-# ===================================================================
-echo "Enter your banner text:"
-read banner_text </dev/tty
-
-# ================= USER INPUT FOR WEATHER LOCATION ================= 
-# DO NOT EDIT THIS SECTION!
-# TO EDIT YOUR WEATHER LOCATION RUN THE SCRIPT THEN EDIT AS PER INTRO ABOVE
-# ===================================================================
-echo "Enter your weather location - supported location types:"
-echo "/paris                # city name (+ for spaces)"
-echo "/~Eiffel+tower        # any location (+ for spaces)"
-echo "/Москва               # Unicode name of any location in any language"
-echo "/JFK                  # airport code (3 letters)"
-echo "/@stackoverflow.com   # domain name"
-echo "/94107                # area codes"
-echo "/-78.46,106.79        # GPS coordinates"
-echo "to automatically detect your location type 'auto-locate' (with hyphen)"
-echo "auto-locate is unreliable, it is suggested to provide a location or region"
-read city_input </dev/tty
 
 if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" ]; then
     city_url=""
@@ -423,7 +423,7 @@ validate_font_list() {
     echo "$valid_fonts|$invalid_fonts"
 }
 
-# Main font management logic
+# ===== Main font management logic =====
 if command -v figlet >/dev/null 2>&1; then
     echo ""
     echo "===== Font Management Setup ====="
@@ -569,6 +569,7 @@ if command -v figlet >/dev/null 2>&1; then
                     
                     if [ "$use_custom_all" = "Y" ]; then
                         DESIRED_FONTS="$custom_fonts"
+                        CUSTOM_FONT_DIR="$custom_font_dir" 
                         # Note: This would require modifying the MOTD script to use -d flag
                         echo "⚠️  Note: Using custom directory requires manual MOTD script editing"
                         echo "    to add '-d $custom_font_dir' to figlet commands."
@@ -584,6 +585,12 @@ if command -v figlet >/dev/null 2>&1; then
             else
                 echo "Directory $custom_font_dir not found. Using defaults."
                 DESIRED_FONTS="$DEFAULT_FONTS"
+            fi
+
+            if [ -n "$custom_font_dir" ]; then
+                FIGLET_CMD="figlet -d \"$custom_font_dir\" -f \"\$FOUND_FONT\" \"\$NAME\""
+            else
+                FIGLET_CMD='figlet -f "$FOUND_FONT" "$NAME"'
             fi
             ;;
             
@@ -692,7 +699,7 @@ cat << MOTD_GENERATOR_SCRIPT > "$MOTD_SCRIPT"
 
 NAME="$banner_text" # EDIT THIS LINE TO CHANGE YOUR BANNER TEXT
 FONT_LIST="$FONT_LIST"
-STATE_FILE="/tmp/motd_font_index"
+STATE_FILE="$STATE_FILE_LOCATION" # File to store current font index
 
 has_cmd() { command -v "\$1" >/dev/null 2>&1; }
 
@@ -764,7 +771,7 @@ get_disk_info() {
 # ===== MOTD Output =====
 echo
 if has_cmd figlet; then
-    figlet -f "\$FOUND_FONT" "\$NAME" | colorize
+    $FIGLET_CMD | colorize
 else
     echo "\$NAME" | colorize
 fi
