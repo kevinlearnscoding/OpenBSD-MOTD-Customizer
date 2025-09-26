@@ -49,7 +49,8 @@ error_exit() {
 trap 'error_exit' EXIT
 
 # ===== MOTD Type Selection =====
-echo "Do you want the MOTD to be system-wide or for your user only? (S/U)"
+echo "Do you want the MOTD customization to be system-wide or for your user only?"
+echo "Please type 'S' for system-wide and 'U' for your user only."
 read motd_type </dev/tty
 motd_type=$(echo "$motd_type" | tr '[:lower:]' '[:upper:]')
 
@@ -73,6 +74,7 @@ else
 fi
 
 # ===== Backup existing MOTD if not already backed up =====
+echo "Making backup of existing MOTD if needed..."
 if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
     echo "Backing up existing MOTD to $MOTD_BACKUP"
     cp "$MOTD_FILE" "$MOTD_BACKUP"
@@ -225,7 +227,12 @@ if echo "$MISSING" | grep -q "lolcat"; then
     fi
 fi
 
-# ===== Install other missing packages =====
+# ===== Update MISSING variable after package installation =====
+if command -v figlet >/dev/null 2>&1; then
+    MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
+fi
+
+# ===== Ask user weather location and temp unit =====
 OTHER_MISSING=$(echo "$MISSING" | xargs)
 if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" ]; then
     city_url=""
@@ -251,12 +258,6 @@ done
 
 # EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
 weather_url="wttr.in/${city_url}?format=3${unit_suffix}" 
-
-# ===== Update MISSING variable after package installation =====
-if command -v figlet >/dev/null 2>&1; then
-    MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
-    echo "figlet is now available for font management."
-fi
 
 # ===== Comprehensive Figlet Font Management =====
 DEFAULT_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
@@ -545,7 +546,6 @@ if command -v figlet >/dev/null 2>&1; then
                 FIGLET_CMD='figlet -f "$FOUND_FONT" "$NAME"'
             fi
             ;;
-            
             
         4)
             echo "Current default font list: $DEFAULT_FONTS"
