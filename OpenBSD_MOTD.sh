@@ -239,7 +239,7 @@ validate_font_list() {
     echo "$valid_fonts|$invalid_fonts"
 }
 
-# ===== Main font management logic =====
+# ===== ===== Main font management logic ===== =====
 if command -v figlet >/dev/null 2>&1; then
     echo ""
     echo "===== Font Management Setup ====="
