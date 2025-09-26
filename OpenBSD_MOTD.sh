@@ -227,53 +227,6 @@ fi
 
 # ===== Install other missing packages =====
 OTHER_MISSING=$(echo "$MISSING" | xargs)
-
-            if [ -d "$custom_font_dir" ]; then
-                echo "Scanning $custom_font_dir for fonts..."
-                custom_fonts=""
-                for font_file in "$custom_font_dir"/*.flf; do
-                    if [ -f "$font_file" ]; then
-                        font_name=$(basename "$font_file" .flf)
-                        if figlet -d "$custom_font_dir" -f "$font_name" "test" >/dev/null 2>&1; then
-                            custom_fonts="$custom_fonts $font_name"
-                        fi
-                    fi
-                done
-
-                if [ -n "$custom_fonts" ]; then
-                    custom_count=$(echo "$custom_fonts" | wc -w)
-                    echo "Found $custom_count fonts in $custom_font_dir:"
-                    echo "$custom_fonts" | tr ' ' '\n' | sort | column -c 80
-                    echo ""
-                    echo "Use all fonts from this directory? (Y/N)"
-                    read use_custom_all </dev/tty
-                    use_custom_all=$(echo "$use_custom_all" | tr '[:lower:]' '[:upper:]')
-
-                    if [ "$use_custom_all" = "Y" ]; then
-                        DESIRED_FONTS="$custom_fonts"
-                        CUSTOM_FONT_DIR="$custom_font_dir"
-                        FIGLET_CMD="figlet -d \"$custom_font_dir\" -f \"\$FOUND_FONT\" \"\$NAME\""
-                    else
-                        echo "Enter space-separated list of fonts to use:"
-                        read selected_custom </dev/tty
-                        DESIRED_FONTS="${selected_custom:-standard}"
-                        if [ -n "$selected_custom" ]; then
-                            FIGLET_CMD="figlet -d \"$custom_font_dir\" -f \"\$FOUND_FONT\" \"\$NAME\""
-                        else
-                            FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
-                        fi
-                    fi
-                else
-                    echo "No valid fonts found in $custom_font_dir. Falling back to 'standard' font."
-                    DESIRED_FONTS="standard"
-                    FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
-                fi
-            else
-                echo "Directory $custom_font_dir not found. Using defaults. Falling back to 'standard' font."
-                DESIRED_FONTS="standard"
-                FIGLET_CMD="figlet -f \"\$FOUND_FONT\" \"\$NAME\""
-            fi
-
 if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" ]; then
     city_url=""
 else
@@ -441,7 +394,6 @@ if command -v figlet >/dev/null 2>&1; then
         echo "None found."
     fi
     echo ""
-    
     echo "Font Configuration Options:"
     echo "1) Use fonts from base figlet installation only"
     echo "2) Download additional font collections from figlet.org"
@@ -593,6 +545,7 @@ if command -v figlet >/dev/null 2>&1; then
                 FIGLET_CMD='figlet -f "$FOUND_FONT" "$NAME"'
             fi
             ;;
+            
             
         4)
             echo "Current default font list: $DEFAULT_FONTS"
