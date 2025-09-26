@@ -17,15 +17,17 @@ set -e
 
 # Welcome message
 cat << EOF
+
+**********************************************************************
 ============================= Welcome! ===============================
 This script will check for/install: lolcat, curl, and figlet.
 It will then set up a few customizations such as a custom banner in a
 fun text effect, and also getting system stats and the current weather.
 This message displays at each login, even from SSH connections.
 figlet and curl are available via pkg_add. lolcat will most likely need
-to be compiled from source. If you would like to build/install lolcat
-yourself, please do so now. If not, the script will offer to build and
-install it for you.
+to be compiled from source, but we'll check if its available from pkg_add.
+If you would like to build/install lolcat yourself, please do so now. 
+If not, the script will offer to build and install it for you.
 
 Let's get started!
 
@@ -33,6 +35,7 @@ EOF
 
 # ===== Check if running as root =====
 if [ "$(id -u)" -ne 0 ]; then
+    echo ""
     echo "⚠ Warning: Some actions (like writing system-wide MOTD)"
     echo "may fail without root privileges."
     echo "Run this script as root or with sudo privileges."
@@ -42,6 +45,7 @@ fi
 error_exit() {
     status=$?
     if [ $status -ne 0 ]; then
+        echo ""
         echo "❌ An error occurred. Exiting script."
     fi
     exit $status
@@ -49,7 +53,9 @@ error_exit() {
 trap 'error_exit' EXIT
 
 # ===== MOTD Type Selection =====
-echo "Do you want the MOTD customization to be system-wide or for your user only?"
+echo ""
+echo "Do you want the Message of the Day (MOTD) customization to be system-wide"
+echo "or for your user only?"
 echo "Please type 'S' for system-wide and 'U' for your user only."
 read motd_type </dev/tty
 motd_type=$(echo "$motd_type" | tr '[:lower:]' '[:upper:]')
@@ -68,20 +74,21 @@ elif [ "$motd_type" = "U" ]; then
     PROFILE_FILE="$HOME_DIR/.profile"
     STATE_FILE_LOCATION="$HOME_DIR/.cache/motd_font_index"
 else
+    echo ""
     echo "Invalid choice. Please enter 'S' for system wide or 'U' for just your user."
     echo "Press Ctrl+C to exit script"
     exit 1
 fi
 
 # ===== Backup existing MOTD if not already backed up =====
-echo "Making backup of existing MOTD if needed..."
 if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
+    echo ""
     echo "Backing up existing MOTD to $MOTD_BACKUP"
     cp "$MOTD_FILE" "$MOTD_BACKUP"
 fi
 
 # ===== Check for required commands =====
-REQUIRED_CMDS="figlet curl lolcat"
+REQUIRED_CMDS="figlet curl"
 MISSING=""
 for cmd in $REQUIRED_CMDS; do
     if ! command -v $cmd >/dev/null 2>&1; then
@@ -89,19 +96,150 @@ for cmd in $REQUIRED_CMDS; do
     fi
 done
 
-# ===== Update MISSING variable after package installation =====
-if command -v figlet >/dev/null 2>&1; then
-    MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
+# Check lolcat availability and installation
+LOL_PKGADD_AVAILABLE="no"
+if pkg_info lolcat >/dev/null 2>&1; then
+    LOL_PKGADD_AVAILABLE="yes"
 fi
 
-# ===== Ask user weather location and temp unit =====
-OTHER_MISSING=$(echo "$MISSING" | xargs)
-if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" ]; then
+LOL_INSTALLED="no"
+if command -v lolcat >/dev/null 2>&1; then
+    LOL_INSTALLED="yes"
+fi
+
+# Only offer lolcat in pkg_add list if available and not installed
+OTHER_MISSING="$MISSING"
+if [ "$LOL_PKGADD_AVAILABLE" = "yes" ] && [ "$LOL_INSTALLED" = "no" ]; then
+    OTHER_MISSING="$OTHER_MISSING lolcat"
+fi
+
+OTHER_MISSING=$(echo "$OTHER_MISSING" | xargs)
+if [ "$LOL_PKGADD_AVAILABLE" = "no" ]; then
+    lolcat_avail="lolcat is not available via pkg_add* and will be offered to be built later.\n*at the time of writing this script."
+else
+    lolcat_avail=""
+fi
+
+# ===== Tell user packages are still missing =====
+if [ -n "$OTHER_MISSING" ]; then
+    echo ""
+    echo "The following required programs are missing: $OTHER_MISSING"
+    echo "$lolcat_avail"
+    echo ""
+    echo "Install via: pkg_add $OTHER_MISSING ? [Y/n]"
+    read install_choice </dev/tty
+    install_choice=${install_choice:-Y}  
+    install_choice=$(echo "$install_choice" | tr '[:lower:]' '[:upper:]')
+
+    if [ "$install_choice" = "Y" ]; then
+        if ! pkg_add $OTHER_MISSING; then
+            echo "Some packages failed to install."
+            echo "Would you like to retry? [Y/n]: "
+            read retry </dev/tty
+            retry=${retry:-Y}
+            retry=$(echo "$retry" | tr '[:lower:]' '[:upper:]')
+            if [ "$retry" = "Y" ]; then
+                pkg_add $OTHER_MISSING || { echo "Still failing. Exiting."; exit 1; }
+            else
+                echo "Exiting."
+                exit 1
+            fi
+        fi
+    fi
+fi
+
+# ===== Make sure packages were installed correctly =====
+if command -v figlet >/dev/null 2>&1; then
+    MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
+    else
+        echo "Figlet did not install properly. Please re-install."
+    fi
+if command -v curl >/dev/null 2>&1; then
+    MISSING=$(echo "$MISSING" | sed 's/curl//g' | sed 's/^ *//' | sed 's/ *$//')
+    else
+        echo "curl did not install properly. Please re-install."
+    fi
+
+
+
+# ===== USER INPUT =====
+
+# =================== USER INPUT FOR BANNER TEXT ==================== 
+# DO NOT EDIT THIS SECTION!
+# TO EDIT YOUR BANNER TEXT RUN THE SCRIPT THEN EDIT AS PER INTRO ABOVE
+# ===================================================================
+
+clear
+cat << EOF2
+Your banner text is displayed at the top of your MOTD, and color will be added
+using lolcat.
+It can be multi-line by including "\n" in the text.
+Example: 'My new\nServer' will display as:
+
+ __  __                             
+|  \/  |                            
+| \  / |_   _   _ __   _____      __
+| |\/| | | | | | '_ \ / _ \ \ /\ / /
+| |  | | |_| | | | | |  __/\ V  V / 
+|_|  |_|\__, | |_| |_|\___| \_/\_/  
+         __/ |                      
+        |___/                       
+  _____                          
+ / ____|                         
+| (___   ___ _ ____   _____ _ __ 
+ \___ \ / _ \ '__\ \ / / _ \ '__|
+ ____) |  __/ |   \ V /  __/ |   
+|_____/ \___|_|    \_/ \___|_|   
+
+in the "big" font. Lolcat will apply color to this banner. 
+You can specify what fonts are used later.
+
+Your banner text can be altered after installation by editing the MOTD file.
+
+
+EOF2
+
+while true; do
+    echo "Enter your banner text: "
+    read banner_text </dev/tty
+
+    if [ -z "$banner_text" ]; then
+        echo "Banner text cannot be empty. Please enter banner text."
+        echo "Press Ctrl+C to exit script"
+    else
+        break
+    fi
+done
+
+# ================= USER INPUT FOR WEATHER LOCATION ================= 
+# DO NOT EDIT THIS SECTION!
+# TO EDIT YOUR WEATHER LOCATION RUN THE SCRIPT THEN EDIT AS PER INTRO ABOVE
+# ===================================================================
+cat << EOF
+Your weather location is used to fetch the current weather conditions.
+Supported location types are:
+Enter your weather location - supported location types:
+/paris                # city name (+ for spaces)
+/~Eiffel+tower        # any location (+ for spaces)
+/Москва               # Unicode name of any location in any language
+/JFK                  # airport code (3 letters)
+/@stackoverflow.com   # domain name
+/94107                # area codes
+/-78.46,106.79        # GPS coordinates
+to automatically detect your location type 'auto-locate' (with hyphen)
+or leave blank.
+NOTE: 
+auto-locate is unreliable, it is suggested to provide a location or region
+for best results.
+
+EOF
+read city_input </dev/tty
+
+if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" || "" ]; then
     city_url=""
 else
     city_url=$(echo "$city_input" | tr ' ' '+')
 fi
-
 
 while true; do
     echo "Do you want the temperature in Fahrenheit or Celsius? (F/C)"
@@ -114,12 +252,15 @@ while true; do
         unit_suffix=""
         break
     else
+        echo ""
         echo "Invalid input. Please enter 'F' or 'C'."
     fi
 done
 
 # EDIT THIS URL TO MAKE ADJUSTMENTS TO YOUR WEATHER REPORT
 weather_url="wttr.in/${city_url}?format=3${unit_suffix}" 
+
+
 
 # ===== Comprehensive Figlet Font Management =====
 DEFAULT_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
@@ -239,13 +380,9 @@ validate_font_list() {
     echo "$valid_fonts|$invalid_fonts"
 }
 
-# ===== ===== Main font management logic ===== =====
+# ========== Main font management logic ==========
 if command -v figlet >/dev/null 2>&1; then
-    echo ""
-    echo "===== Font Management Setup ====="
-    echo "figlet is installed. Let's configure your fonts!"
-    echo ""
-    
+        
     # Discover what's available
     available_fonts=$(discover_system_fonts)
     available_count=$(echo "$available_fonts" | wc -w)
@@ -385,9 +522,6 @@ if command -v figlet >/dev/null 2>&1; then
                     if [ "$use_custom_all" = "Y" ]; then
                         DESIRED_FONTS="$custom_fonts"
                         CUSTOM_FONT_DIR="$custom_font_dir" 
-                        # Note: This would require modifying the MOTD script to use -d flag
-                        echo "⚠️  Note: Using custom directory requires manual MOTD script editing"
-                        echo "    to add '-d $custom_font_dir' to figlet commands."
                     else
                         echo "Enter space-separated list of fonts to use:"
                         read selected_custom </dev/tty
@@ -496,34 +630,11 @@ fi
 FONT_LIST="$DESIRED_FONTS"
 
 # ===== lolcat build logic =====
-if echo "$MISSING" | grep -q "lolcat"; then
-    echo "lolcat is required to provide colorful text banners. If you want to"
-    echo "use lolcat, it is not yet installed. Options:"
-    echo "1) Build lolcat yourself and rerun this script later"
-    echo "2) Let the script build the high-quality jaseg version for you"
-    echo "3) Do not use lolcat - cannot be changed later."
-    echo 
-    echo "!!! lolcat being installed later will be automatically detected, and used."
-    echo "If you wish to have plaintext banners only you will need to"
-    echo "edit the MOTD script manually to remove lolcat functionality."
-    echo "Enter 1, 2, or 3: "
-    read lol_choice </dev/tty
-
-    if [ "$lol_choice" = "1" ]; then
-        echo "Please build lolcat manually from"
-        echo "https://github.com/jaseg/lolcat and rerun this script."
-        echo "(We recommend jaseg's version for its vibrant colors)"
-        echo "Exiting script for now."
-        echo "lolcat can be installed later and the MOTD will automatically detect it."
-        exit 0
-
-    elif [ "$lol_choice" = "2" ]; then
-        echo "Building lolcat from source..."
-
+install_lolcat() {
         # Check if git is available, install if needed
         if ! command -v git >/dev/null 2>&1; then
             echo "git is required for building lolcat."
-            echo "Install git? (Y/N)"
+            echo "Install git? [Y/N"
             read git_install </dev/tty
             git_install=$(echo "$git_install" | tr '[:lower:]' '[:upper:]')
             
@@ -643,6 +754,34 @@ if echo "$MISSING" | grep -q "lolcat"; then
         exit 1
     fi
 fi
+        }
+
+
+if echo "$MISSING" | grep -q "lolcat"; then
+    echo "lolcat is required to provide colorful text banners. If you want to"
+    echo "use lolcat, it is not yet installed. Options:"
+    echo "1) Build lolcat yourself and rerun this script later"
+    echo "2) Let the script build the high-quality jaseg version for you"
+    echo "3) Do not use lolcat - cannot be changed later."
+    echo 
+    echo "!!! lolcat being installed later will be automatically detected, and used."
+    echo "If you wish to have plaintext banners only you will need to"
+    echo "edit the MOTD script manually to remove lolcat functionality."
+    echo "Enter 1, 2, or 3: "
+    read lol_choice </dev/tty
+
+    if [ "$lol_choice" = "1" ]; then
+        echo "Please build lolcat manually from"
+        echo "https://github.com/jaseg/lolcat and rerun this script."
+        echo "(We recommend jaseg's version for its vibrant colors)"
+        echo "Exiting script for now."
+        echo "lolcat can be installed later and the MOTD will automatically detect it."
+        exit 0
+
+    elif [ "$lol_choice" = "2" ]; then
+        echo "Building lolcat from source..."
+        install_lolcat
+
 
 # === FILE CREATION SECTION ===
 # ===== CREATE DYNAMIC MOTD SCRIPT =====
@@ -741,7 +880,7 @@ echo
 if has_cmd figlet; then
     $FIGLET_CMD | colorize
 else
-    echo "\$NAME" | colorize
+    printf "\$NAME" | colorize
 fi
 echo ""
 echo "Font used: \$FOUND_FONT"
