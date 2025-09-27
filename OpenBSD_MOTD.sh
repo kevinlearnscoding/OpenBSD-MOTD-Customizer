@@ -415,7 +415,8 @@ if command -v figlet >/dev/null 2>&1; then
     
     echo "Found $available_count fonts currently available on your system:"
     if [ $available_count -gt 0 ]; then
-        echo "$available_fonts" | tr ' ' '\n' | sort | column -c 80
+        echo "Available fonts (press 'q' to exit listing):"
+        echo "$available_fonts" | tr ' ' '\n' | sort | column -c 80 | less
     else
         echo "None found."
     fi
@@ -424,7 +425,7 @@ if command -v figlet >/dev/null 2>&1; then
     echo "1) Use fonts from base figlet installation only"
     echo "2) Download additional font collections from figlet.org"
     echo "3) Specify custom font directory path"
-    echo "4) Manually edit font rotation list"
+    echo "4) Manually edit the list fonts that are used in the banner rotation"
     echo "Enter your choice (1-4): "
     read font_option </dev/tty
     
@@ -770,15 +771,12 @@ install_lolcat() {
 
         # Cleanup on success
         cd ~ || true
-        rm -rf "$TMP_DIR"
-
-    elif [ "$lol_choice" = "3" ]; then
-        echo "Proceeding without lolcat. Banners will be in plain text."
+        rm -rf "$TMP_DIR"    
     
+    fi
     else
         echo "Invalid choice. Please enter 1, 2, or 3."
         exit 1
-    fi
 fi
         }
 
@@ -807,7 +805,9 @@ if echo "$MISSING" | grep -q "lolcat"; then
     elif [ "$lol_choice" = "2" ]; then
         echo "Building lolcat from source..."
         install_lolcat
-
+    
+    elif [ "$lol_choice" = "3" ]; then
+        echo "Proceeding without lolcat. Banners will be in plain text."
 
 # === FILE CREATION SECTION ===
 # ===== CREATE DYNAMIC MOTD SCRIPT =====
