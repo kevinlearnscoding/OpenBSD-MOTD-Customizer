@@ -89,6 +89,7 @@ if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
     echo ""
     echo "Backing up existing MOTD to $MOTD_BACKUP"
     cp "$MOTD_FILE" "$MOTD_BACKUP"
+    rm "$MOTD_FILE"
 fi
 
 # ===== Check if required command are installed =====
@@ -325,7 +326,7 @@ weather_url="wttr.in/${city_url}?format=3${unit_suffix}"
 
 clear
 # ===== Comprehensive Figlet Font Management =====
-DEFAULT_FONTS="alligator basic big block colossal cosmic dotmatrix epic larry3d letters lean nancyj poison roman speed"
+DEFAULT_FONTS="alligator basic big block colossal cosmic epic larry3d letters lean nancyj poison roman speed"
 
 # ========== Main font management logic ==========
 if command -v figlet >/dev/null 2>&1; then
@@ -586,7 +587,7 @@ else
                 echo "  Install fonts in /usr/local/share/figlet or ~/.figlet"
             fi
         fi
-        count=$((count + 1))
+        count=\$((count + 1))
     done
 
     # Fallback
@@ -615,7 +616,7 @@ get_disk_info() {
 # ===== Display MOTD Output =====
 echo
 if has_cmd figlet; then
-    figlet -f $FOUND_FONT | colorize
+    figlet -f $FOUND_FONT "$NAME" | colorize
 else
     printf "\$NAME" | colorize
 fi
