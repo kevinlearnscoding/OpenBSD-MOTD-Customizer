@@ -16,6 +16,7 @@
 set -e
 
 # Welcome message
+clear
 cat << EOF
 
 **********************************************************************
@@ -31,7 +32,10 @@ If not, the script will offer to build and install it for you.
 
 Let's get started!
 
+
+Press Enter to continue or Ctrl+C to exit the script. 
 EOF
+read </dev/tty
 
 # ===== Check if running as root =====
 if [ "$(id -u)" -ne 0 ]; then
@@ -41,7 +45,7 @@ if [ "$(id -u)" -ne 0 ]; then
     echo "Run this script as root or with sudo privileges."
 fi
 
-# ===== Error Handling =====
+# ===== General/Generic Error Handling =====
 error_exit() {
     status=$?
     if [ $status -ne 0 ]; then
@@ -53,7 +57,7 @@ error_exit() {
 trap 'error_exit' EXIT
 
 # ===== MOTD Type Selection =====
-echo ""
+clear
 echo "Do you want the Message of the Day (MOTD) customization to be system-wide"
 echo "or for your user only?"
 echo "Please type 'S' for system-wide and 'U' for your user only."
@@ -85,9 +89,12 @@ if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
     echo ""
     echo "Backing up existing MOTD to $MOTD_BACKUP"
     cp "$MOTD_FILE" "$MOTD_BACKUP"
+    sleep 4
 fi
 
-# ===== Check for required commands =====
+# ===== Check if required command are installed =====
+clear
+echo "Checking if required commands are installed..."
 REQUIRED_CMDS="figlet curl"
 MISSING=""
 for cmd in $REQUIRED_CMDS; do
@@ -97,14 +104,17 @@ for cmd in $REQUIRED_CMDS; do
 done
 
 # Check lolcat availability and installation
+echo "Checking if lolcat is installed..."
+echo "(script will move to next screen automatically)"
 LOL_PKGADD_AVAILABLE="no"
 if pkg_info lolcat >/dev/null 2>&1; then
     LOL_PKGADD_AVAILABLE="yes"
 fi
-
+echo "Checking if lolcat is available via pkg_add..."
 LOL_INSTALLED="no"
 if command -v lolcat >/dev/null 2>&1; then
     LOL_INSTALLED="yes"
+    echo "lolcat is already installed."
 fi
 
 # Only offer lolcat in pkg_add list if available and not installed
@@ -120,9 +130,10 @@ else
     lolcat_avail=""
 fi
 
-# ===== Tell user packages are still missing =====
+# ===== Tell user what packages are missing =====
 if [ -n "$OTHER_MISSING" ]; then
-    echo ""
+    clear
+    echo "Let's get started installing packages."
     echo "The following required programs are missing: $OTHER_MISSING"
     echo "$lolcat_avail"
     echo ""
@@ -132,7 +143,11 @@ if [ -n "$OTHER_MISSING" ]; then
     install_choice=$(echo "$install_choice" | tr '[:lower:]' '[:upper:]')
 
     if [ "$install_choice" = "Y" ]; then
-        if ! pkg_add $OTHER_MISSING; then
+        if pkg_add $OTHER_MISSING; then
+            echo "✅ Packages installed successfully."
+            echo "Press Enter to continue."
+            read </dev/tty
+        else
             echo "Some packages failed to install."
             echo "Would you like to retry? [Y/n]: "
             read retry </dev/tty
@@ -152,14 +167,18 @@ fi
 if command -v figlet >/dev/null 2>&1; then
     MISSING=$(echo "$MISSING" | sed 's/figlet//g' | sed 's/^ *//' | sed 's/ *$//')
     else
+        echo ""
         echo "Figlet did not install properly. Please re-install."
+        read </dev/tty
     fi
 if command -v curl >/dev/null 2>&1; then
     MISSING=$(echo "$MISSING" | sed 's/curl//g' | sed 's/^ *//' | sed 's/ *$//')
     else
+        echo ""
         echo "curl did not install properly. Please re-install."
+        read </dev/tty
     fi
-
+    
 
 
 # ===== USER INPUT =====
@@ -172,10 +191,10 @@ if command -v curl >/dev/null 2>&1; then
 clear
 cat << EOF2
 Your banner text is displayed at the top of your MOTD, and color will be added
-using lolcat.
-It can be multi-line by including "\n" in the text.
+using lolcat (later).
+Your banner can be multi-line by including "\n" in the text where you want a
+line return to be inserted - do not insert a space before/after the "\n".
 Example: 'My new\nServer' will display as:
-
  __  __                             
 |  \/  |                            
 | \  / |_   _   _ __   _____      __
@@ -191,15 +210,20 @@ Example: 'My new\nServer' will display as:
  ____) |  __/ |   \ V /  __/ |   
 |_____/ \___|_|    \_/ \___|_|   
 
-in the "big" font. Lolcat will apply color to this banner. 
-You can specify what fonts are used later.
-
+Example font is "big" - fonts can be selected/changed later.
+Lolcat will apply color to this banner. 
+You can test fonts by running "figlet -f <fontname> 'Your Text Here'" outside
+of this script to see how it looks.
 Your banner text can be altered after installation by editing the MOTD file.
-
-
+[Press enter to continue]
 EOF2
+read </dev/tty
+clear
 
 while true; do
+    echo "************************************"
+    echo "Force line return: \n"
+    echo "************************************"
     echo "Enter your banner text: "
     read banner_text </dev/tty
 
@@ -215,6 +239,7 @@ done
 # DO NOT EDIT THIS SECTION!
 # TO EDIT YOUR WEATHER LOCATION RUN THE SCRIPT THEN EDIT AS PER INTRO ABOVE
 # ===================================================================
+clear
 cat << EOF
 Your weather location is used to fetch the current weather conditions.
 Supported location types are:
@@ -235,13 +260,14 @@ for best results.
 EOF
 read city_input </dev/tty
 
-if [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" || "" ]; then
+if [ -z "$city_input" ] || [ "$(echo "$city_input" | tr '[:upper:]' '[:lower:]')" = "auto-locate" ]; then
     city_url=""
 else
     city_url=$(echo "$city_input" | tr ' ' '+')
 fi
 
 while true; do
+    echo ""
     echo "Do you want the temperature in Fahrenheit or Celsius? (F/C)"
     read unit </dev/tty
     unit=$(echo "$unit" | tr '[:lower:]' '[:upper:]')
