@@ -54,43 +54,62 @@ error_exit() {
     fi
     exit $status
 }
-trap 'error_exit' EXIT
+trap 'status=$?; [ $status -ne 0 ] && echo "❌ An error occurred. Exiting." ' EXIT
+
 
 # ===== MOTD Type Selection =====
 clear
-echo "Do you want the Message of the Day (MOTD) customization to be system-wide"
-echo "or for your user only?"
-echo "Please type 'S' for system-wide and 'U' for your user only."
-read motd_type </dev/tty
-motd_type=$(echo "$motd_type" | tr '[:lower:]' '[:upper:]')
+while true; do
+    echo "Do you want the Message of the Day (MOTD) customization to be system-wide"
+    echo "or for your user only?"
+    echo "Please type 'S' for system-wide and 'U' for your user only, and press enter."
+    read motd_type </dev/tty
+    motd_type=$(echo "$motd_type" | tr '[:lower:]' '[:upper:]')
 
-if [ "$motd_type" = "S" ]; then
-    MOTD_FILE="/etc/motd"
-    MOTD_BACKUP="/etc/motd.backup"
-    MOTD_SCRIPT="/usr/local/bin/rc.motd_openbsd"
-    PROFILE_FILE="/etc/profile"
-    STATE_FILE_LOCATION="/var/tmp/motd_font_index"
-elif [ "$motd_type" = "U" ]; then
-    HOME_DIR=$(eval echo ~"$USER")
-    MOTD_FILE="$HOME_DIR/.motd"
-    MOTD_BACKUP="$HOME_DIR/.motd.backup"
-    MOTD_SCRIPT="$HOME_DIR/.motd_openbsd"
-    PROFILE_FILE="$HOME_DIR/.profile"
-    STATE_FILE_LOCATION="$HOME_DIR/.cache/motd_font_index"
-else
-    echo ""
-    echo "Invalid choice. Please enter 'S' for system wide or 'U' for just your user."
-    echo "Press Ctrl+C to exit script"
-    exit 1
+    if [ -z "$motd_type" ]; then
+        echo "Input cannot be empty. Please enter 'S' or 'U'."
+        echo "Press Ctrl+C to exit script"
+        echo ""
+    elif [ "$motd_type" = "S" ]; then
+        MOTD_FILE="/etc/motd" # Existing system-wide MOTD file
+        MOTD_BACKUP="/etc/motd.backup"
+        MOTD_SCRIPT="/usr/local/bin/rc.motd_openbsd" # New MOTD script file
+        PROFILE_FILE="/etc/profile"
+        STATE_FILE_LOCATION="/var/cache/motd_font_index"
+        break # Exit the loop after valid selection
+    elif [ "$motd_type" = "U" ]; then
+        HOME_DIR=$(eval echo ~"$USER")
+        MOTD_FILE="$HOME_DIR/.motd"
+        MOTD_BACKUP="$HOME_DIR/.motd.backup"
+        MOTD_SCRIPT="$HOME_DIR/.motd_openbsd"
+        PROFILE_FILE="$HOME_DIR/.profile"
+        STATE_FILE_LOCATION="$HOME_DIR/.cache/motd_font_index"
+        STATE_DIRECTORY_LOCATION="$HOME_DIR/.cache"
+        break # Exit the loop after valid selection
+    else
+        echo "Invalid input. Please enter 'S' for system-wide or 'U' for just your user."
+    fi
+done
+
+# ===== Make sure state-index directory exists =====
+if [ "$motd_type" = "U" ]; then
+    if [ ! -d "$STATE_DIRECTORY_LOCATION" ]; then
+        mkdir -p "$STATE_DIRECTORY_LOCATION"
+        touch "$STATE_FILE_LOCATION"
+        echo "1" > "$STATE_FILE_LOCATION"
+    fi
 fi
-
 # ===== Backup existing MOTD if not already backed up =====
 if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
-    echo ""
     echo "Backing up existing MOTD to $MOTD_BACKUP"
     cp "$MOTD_FILE" "$MOTD_BACKUP"
-    rm "$MOTD_FILE"
+    echo "Back up complete."
+    echo "Removing exiting MOTD file to avoid conflicts."
+    if [ "$(id -u)" -eq 0 ]; then
+    rm -f "$MOTD_FILE"
+    fi
 fi
+
 
 # ===== Check if required command are installed =====
 clear
@@ -366,7 +385,7 @@ install_lolcat() {
         # Check if git is available, install if needed
         if ! command -v git >/dev/null 2>&1; then
             echo "git is required for building lolcat."
-            echo "Install git? [Y/N]"
+            echo "Install git? [Y/n]"
             read git_install </dev/tty
             git_install=${git_install:-Y}
             git_install=$(echo "$git_install" | tr '[:lower:]' '[:upper:]')
@@ -552,7 +571,7 @@ colorize() {
     if has_cmd lolcat; then
         lolcat -f
     else
-        ;
+        :
     fi
 }
 divider() {
@@ -570,7 +589,9 @@ else
     if [ -f "\$STATE_FILE" ]; then
         INDEX=\$(cat "\$STATE_FILE")
     else
-        INDEX=0
+        mkdir -p "\$STATE_DIRECTORY_LOCATION"
+        touch "\$STATE_FILE"
+        INDEX=1
     fi
 
     FOUND_FONT=""
@@ -616,7 +637,7 @@ get_disk_info() {
 # ===== Display MOTD Output =====
 echo
 if has_cmd figlet; then
-    figlet -f $FOUND_FONT "$NAME" | colorize
+    figlet -f \$FOUND_FONT "\$NAME" | colorize
 else
     printf "\$NAME" | colorize
 fi
@@ -631,7 +652,7 @@ echo " 💽 Disk     : \$(get_disk_info)"
 divider | colorize
 if has_cmd curl; then
     echo " 🌦️  Weather:"
-    curl -s "$weather_url" || echo " (unavailable)"
+    curl -s --max-time 5 "$weather_url" || echo " (unavailable)"
 fi
 echo
 divider | colorize
