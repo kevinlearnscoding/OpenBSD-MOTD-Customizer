@@ -30,8 +30,14 @@ to be compiled from source, but we'll check if its available from pkg_add.
 If you would like to build/install lolcat yourself, please do so now. 
 If not, the script will offer to build and install it for you.
 
-Let's get started!
+lolcat and emojis will not display properly if your terminal does not 
+support fonts with emojis and 24-bit "truecolor" sequences.
+If your lolcat colors do not display properly, you may need to 
+adjust the lolcat settings in the MOTD script later. 
+(try adding -x to force 16-color mode, or remove lolcat commands for plain text)
+**********************************************************************
 
+Let's get started!
 
 Press Enter to continue or Ctrl+C to exit the script. 
 EOF1
@@ -92,13 +98,16 @@ while true; do
 done
 
 # ===== Make sure state-index directory exists =====
+
 if [ "$motd_type" = "U" ]; then
+    echo "Creating small cache file."
     if [ ! -d "$STATE_DIRECTORY_LOCATION" ]; then
         mkdir -p "$STATE_DIRECTORY_LOCATION"
         touch "$STATE_FILE_LOCATION"
         echo "1" > "$STATE_FILE_LOCATION"
     fi
 fi
+
 # ===== Backup existing MOTD if not already backed up =====
 if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
     echo "Backing up existing MOTD to $MOTD_BACKUP"
@@ -108,8 +117,15 @@ if [ -f "$MOTD_FILE" ] && [ ! -f "$MOTD_BACKUP" ]; then
     if [ "$(id -u)" -eq 0 ]; then
     rm -f "$MOTD_FILE"
     fi
+    if [ ! -f $MOTD_FILE ]; then
+    echo "Existing MOTD file removed."
+    else
+    echo "Failed to remove existing MOTD file. Please remove it manually:"
+    echo "$MOTD_FILE"
+    fi
+    echo "Press Enter to continue."
+    read </dev/tty
 fi
-
 
 # ===== Check if required command are installed =====
 clear
@@ -121,14 +137,12 @@ for cmd in $REQUIRED_CMDS; do
         MISSING="$MISSING $cmd"
     fi
 done
-##############
-echo "DEBUG: MOTD_SCRIPT is set to: '$MOTD_SCRIPT'"
-echo "DEBUG: MISSING is set to: '$MISSING'"
-##############
+
 # Check lolcat availability and installation
 echo "Checking if lolcat is installed..."
 echo "*************************************************"
 echo "SCRIPT WILL MOVE TO NEXT SCREEN AUTOMATICALLY"
+echo "*************************************************"
 echo "DO NOT TYPE ANY KEYS / DO NOT PRESS ENTER"
 echo "*************************************************"
 LOL_PKGADD_AVAILABLE="no"
@@ -140,37 +154,23 @@ LOL_INSTALLED="no"
 if command -v lolcat >/dev/null 2>&1; then
     LOL_INSTALLED="yes"
     echo "lolcat is already installed."
+    echo "lolcat will not display color if your terminal does not support it."
 fi
 
-#############
-echo "DEBUG: LOL_PKGADD_AVAILABLE is set to: '$LOL_PKGADD_AVAILABLE'"
-echo "DEBUG: LOL_INSTALLED is set to: '$LOL_INSTALLED'"
-echo "DEBUG: MISSING is set to: '$MISSING'"
-#############
 
 # Only offer lolcat in pkg_add list if available and not installed
 OTHER_MISSING="$MISSING"
 if [ "$LOL_PKGADD_AVAILABLE" = "yes" ] && [ "$LOL_INSTALLED" = "no" ]; then
     OTHER_MISSING="$OTHER_MISSING lolcat"
 fi
-########
-echo "DEBUG: OTHER_MISSING is set to: '$OTHER_MISSING' after 'only offer lolcat in pkg_add if availabel and not installed'"
-########
+
 OTHER_MISSING=$(echo "$OTHER_MISSING" | xargs)
 if [ "$LOL_PKGADD_AVAILABLE" = "no" ]; then
     lolcat_avail="lolcat is not available via pkg_add* and will be offered to be built later.\n*at the time of writing this script."
 else
     lolcat_avail=""
 fi
-########
-echo ""
-echo "DEBUG: MOTD_SCRIPT is set to: '$MOTD_SCRIPT'"
-echo "DEBUG: OTHER_MISSING is set to: '$OTHER_MISSING' "
-echo "DEBUG: LOL_PKGADD_AVAILABLE is set to: '$LOL_PKGADD_AVAILABLE'"
-echo "DEBUG: LOL_INSTALLED is set to: '$LOL_INSTALLED'"
-echo "DEBUG: MISSING is set to: '$MISSING'"
-echo "DEBUG: lolcat_avail is set to: '$lolcat_avail'"before 'tell user what packages are missing'
-#######
+
 # ===== Tell user what packages are missing =====
 if [ -n "$OTHER_MISSING" ]; then
     clear
@@ -203,16 +203,6 @@ if [ -n "$OTHER_MISSING" ]; then
         fi
     fi
 fi
-#################
-echo "DEBUG: OTHER_MISSING is ' $OTHER_MISSING ' after 'tell user what packages are missing'"
-echo "DEBUG: MISSING is ' $MISSING ' after 'tell user what packages are missing'"
-echo "DEBUG: LOL_PKGADD_AVAILABLE is set to: '$LOL_PKGADD_AVAILABLE'"
-echo "DEBUG: LOL_INSTALLED is set to: '$LOL_INSTALLED'"
-echo "DEBUG: lolcat_avail is set to: '$lolcat_avail'"
-echo "DEBUG: MOTD_SCRIPT is set to: '$MOTD_SCRIPT'"
-echo ""
-#################
-
 
 # ===== Make sure packages were installed correctly =====
 if command -v figlet >/dev/null 2>&1; then
@@ -230,7 +220,6 @@ if command -v curl >/dev/null 2>&1; then
         read </dev/tty
     fi
     
-
 
 # ===== USER INPUT =====
 
@@ -288,9 +277,6 @@ EOF3
 done
 }
 enter_banner_text
-
-
-
 
 # ================= USER INPUT FOR WEATHER LOCATION ================= 
 # DO NOT EDIT THIS SECTION!
@@ -511,6 +497,10 @@ if ! command -v lolcat >/dev/null 2>&1; then
     echo "!!! lolcat being installed later will be automatically detected, and used."
     echo "If you wish to have plaintext banners only you will need to"
     echo "edit the MOTD script manually to remove lolcat functionality."
+    echo ""
+    echo "WARNING!:" 
+    echo "lolcat colors will not display properly if your terminal does not support it."
+    echo ""
     echo "Enter 1, 2, or 3: "
     read lol_choice </dev/tty
 
@@ -530,14 +520,6 @@ if ! command -v lolcat >/dev/null 2>&1; then
         echo "Proceeding without lolcat. Banners will be in plain text."
     fi
 fi
-
-#################################
-echo "DEBUG: MOTD_SCRIPT is set to: '$MOTD_SCRIPT'"
-if [ -z "$MOTD_SCRIPT" ]; then
-    echo "ERROR: MOTD_SCRIPT is not set!"
-    exit 1
-fi
-#################################
 
 # === FILE CREATION SECTION ===
 touch "$MOTD_SCRIPT"
@@ -569,9 +551,9 @@ has_cmd() { command -v "\$1" >/dev/null 2>&1; }
 
 colorize() {
     if has_cmd lolcat; then
-        lolcat -f
+    cat - | lolcat -f
     else
-        :
+    cat -
     fi
 }
 divider() {
@@ -589,9 +571,7 @@ else
     if [ -f "\$STATE_FILE" ]; then
         INDEX=\$(cat "\$STATE_FILE")
     else
-        mkdir -p "\$STATE_DIRECTORY_LOCATION"
-        touch "\$STATE_FILE"
-        INDEX=1
+        INDEX=0
     fi
 
     FOUND_FONT=""
@@ -678,3 +658,8 @@ echo "$MOTD_BACKUP"
 echo "It will run at login via $PROFILE_FILE"
 echo "======================================================"
 echo ""
+echo "Press Ctrl+C to exit the script or Enter to view your new MOTD now."
+read </dev/tty
+clear
+sh "$MOTD_SCRIPT"
+exit 0

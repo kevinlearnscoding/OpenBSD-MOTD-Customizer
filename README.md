@@ -9,11 +9,11 @@ It automates setup for user or system-wide MOTD, handles dependencies, sets up [
 
 
 <div align="center">
-  <img src="images/openbsd_screenshot1.png" width="80%" alt="Screenshot placeholder #1"/>
+  <img src="images/openbsd_screenshot1.png" width="80%" alt="Dark Background"/>
 </div>
 
 <div align="center">
-  <img src="images/openbsd_screenshot2.png" width="80%" alt="Screenshot placeholder #2"/>
+  <img src="images/openbsd_screenshot2.png" width="80%" alt="Light Background"/>
 </div>
 
 ---
